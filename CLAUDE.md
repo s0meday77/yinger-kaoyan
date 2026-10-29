@@ -67,8 +67,8 @@
 
 ## 手机独立安装（用户首选，2026-10-29 上线）
 
-**线上地址：<https://s0meday77.github.io/kaoyan-yinger/>**
-**仓库：<https://github.com/s0meday77/kaoyan-yinger>**（`app/` 目录就是仓库根）
+**线上地址：<https://s0meday77.github.io/yinger-kaoyan/>**
+**仓库：<https://github.com/s0meday77/yinger-kaoyan>**（完整源码仓库，`app/` 由 GitHub Actions 发布到 Pages）
 
 iPhone Safari 打开 → 添加到主屏幕 → 从图标进 App → ⚙ 设置 → **📥 打包到手机**。
 打包会把 1942 个音频灌进 Cache Storage，之后**彻底离线**：不用电脑、不用联网、不用开服务器。
@@ -77,12 +77,17 @@ iPhone Safari 打开 → 添加到主屏幕 → 从图标进 App → ⚙ 设置 
 
 **发布更新：**
 ```bash
-cd /Users/diting/考研英二/app
-# ⚠️ 改了 index.html / *.js / *.css 一定要先把 sw.js 里的 VER 往上加一位，
+cd /Users/diting/英二考研
+# ⚠️ 改了 app/ 里的前端文件，一定要先把 app/sw.js 的 VER 往上加一位，
 #    否则手机上的旧缓存不会失效，用户看不到新版
 git add -A && git commit -m "feat: <改动描述>" && git push
 ```
-推送后 GitHub Pages 自动重建，约 2~5 分钟生效。手机端从图标重开 App 即可拿到新版。
+推送后 `.github/workflows/deploy.yml` 自动把 `app/` 发布到 Pages，约 20 秒~1 分钟生效。
+手机端从图标重开 App 即可拿到新版。
+
+> 仓库名用 `yinger-kaoyan` 不是中文「英二考研」：GitHub 会把纯中文仓库名规范化成 `-`，
+> 直接创建会报「Name already exists」，Pages 路径也会变成一串百分号编码。
+> 中文名只用在本地文件夹和 README 标题上。
 
 ## 另外两种打开方式（本地开发/应急用）
 
@@ -92,7 +97,7 @@ git add -A && git commit -m "feat: <改动描述>" && git push
 ## 导入新一类词（拍完照后照这个跑）
 
 ```bash
-cd /Users/diting/考研英二
+cd /Users/diting/英二考研
 
 # 1. OCR（vision_ocr 需要 pyobjc，用专用 venv）
 /tmp/ocrvenv/bin/python -I tools/ocr/vision_ocr.py src/photos/<新照片目录>/
@@ -140,8 +145,8 @@ python3 -I tools/crosscheck.py app/data/words.json --out src/crosscheck.json
 - `localStorage` 在 file:// 下可能抛异常，读写都要包 try/catch
 - 改前端后跑回归（首次需 `cd tests && npm i jsdom`）：
   ```bash
-  cd /Users/diting/考研英二/tests && node test3.js      # 50 项功能断言
-  cd /Users/diting/考研英二/tests && node filetest.js   # 模拟 file:// 真实加载顺序
+  cd /Users/diting/英二考研/tests && node test3.js      # 50 项功能断言
+  cd /Users/diting/英二考研/tests && node filetest.js   # 模拟 file:// 真实加载顺序
   ```
 
 单文件都控制在 500 行以内（全局规范）。
