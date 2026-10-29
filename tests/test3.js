@@ -47,7 +47,9 @@ const check = (n, c, e = '') => out.push(`${c ? '✅' : '❌'} ${n}${e ? ' — '
   const cats = $$('.cat-chip');
   check('六个类别都在', cats.length === 6, [...cats].map((c) => c.textContent).join(' / '));
   check('高频词是选中态', cats[0].classList.contains('active'), cats[0].textContent);
-  check('其余五类标待导入', [...cats].slice(1).every((c) => c.classList.contains('empty')), '');
+  // 中频词已上线，剩低频/偶考/基础/补充四类还没导入
+  check('中频词已导入', !cats[1].classList.contains('empty'), cats[1].textContent);
+  check('其余四类标待导入', [...cats].slice(2).every((c) => c.classList.contains('empty')), '');
 
   const pg = data.categories[0].pages;
   const pages = $$('.page-chip');
@@ -179,7 +181,9 @@ const check = (n, c, e = '') => out.push(`${c ? '✅' : '❌'} ${n}${e ? ' — '
 
   // 乱序
   const pageNo = window.__s.page;
-  const textbook = window.__s.words.filter((w) => w.page === pageNo).map((w) => w.w).join(',');
+  // ⚠️ 必须连类别一起筛：高频和中频的页号都从 1 开始，只按 page 会串类
+  const inCat = (w) => w.cat === window.__s.cat;
+  const textbook = window.__s.words.filter((w) => inCat(w) && w.page === pageNo).map((w) => w.w).join(',');
   window.document.querySelector('#settingsBtn').click();
   const shuf = $('#optShuffle');
   shuf.checked = true;
@@ -209,7 +213,7 @@ const check = (n, c, e = '') => out.push(`${c ? '✅' : '❌'} ${n}${e ? ' — '
   undone.dispatchEvent(new window.Event('change'));
   await sleep(40);
   const shown = $$('#wordList .card').length;
-  const allInPage = window.__s.words.filter((w) => w.page === window.__s.page).length;
+  const allInPage = window.__s.words.filter((w) => inCat(w) && w.page === window.__s.page).length;
   check('只练未掌握：列表变短', shown < allInPage, `${shown} / ${allInPage}`);
   undone.checked = false;
   undone.dispatchEvent(new window.Event('change'));
@@ -251,18 +255,21 @@ const check = (n, c, e = '') => out.push(`${c ? '✅' : '❌'} ${n}${e ? ' — '
 
   // 数据完整性
   check('每天词数连续无空洞', (() => {
-    for (const p of pg) {
-      const ws = data.words.filter((w) => w.page === p.index);
-      if (ws.length !== p.count) return false;
-      const days = [...new Set(ws.map((w) => w.day))].sort((a, b) => a - b);
-      if (days.join(',') !== days.map((_, i) => i + 1).join(',')) return false;
+    for (const c of data.categories) {
+      for (const p of c.pages) {
+        const ws = data.words.filter((w) => w.cat === c.name && w.page === p.index);
+        if (ws.length !== p.count) return false;
+        const days = [...new Set(ws.map((w) => w.day))].sort((a, b) => a - b);
+        if (days.join(',') !== days.map((_, i) => i + 1).join(',')) return false;
+      }
     }
     return true;
   })(), '');
-  check('全局天数 1..48 连续', (() => {
-    const g = [...new Set(data.words.map((w) => w.gday))].sort((a, b) => a - b);
-    return g.length === 48 && g[0] === 1 && g[47] === 48;
-  })(), `${new Set(data.words.map((w) => w.gday)).size} 天`);
+  // 每个类别的全局天数各自从 1 连续排下来（高频 48 天、中频 36 天）
+  check('每类全局天数连续', data.categories.every((c) => {
+    const g = [...new Set(data.words.filter((w) => w.cat === c.name).map((w) => w.gday))].sort((a, b) => a - b);
+    return g.length === c.dayCount && g[0] === 1 && g[g.length - 1] === c.dayCount;
+  }), data.categories.map((c) => `${c.name} ${c.dayCount} 天`).join(' / '));
 
   const bad = data.words.filter((w) => !w.us || !w.uk || !w.us_audio || !w.uk_audio);
   check('所有词都有英美音标和录音', bad.length === 0, bad.length ? bad.slice(0, 5).map((w) => w.w).join(',') : '');

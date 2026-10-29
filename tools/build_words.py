@@ -54,21 +54,88 @@ def cached_json(word):
     return data
 
 
+# 每个词性行的释义总长上限（字符）。到量就停在完整义项的逗号处，
+# 绝不在字中间硬切——曾经把 suffer 切成「受苦，受折」、judgement 切成「（同 judgme」
+SENSE_BUDGET = 24
+SENSE_MAX = 30          # 单个义项的上限，超了按标点收口
+NAME_WORDS = ("人名", "地名")
+MARKUP_RE = re.compile(r"<[^>]+>|（[^）]*）|\([^)]*\)")
+
+
+def clean_sense(s):
+    """去掉对背单词没用的比对提示，比如 judgement 的「（同 judgment）」。"""
+    s = re.sub(r"（同[^）]*）|\(同[^)]*\)", "", s)
+    return s.strip(" ，、；")
+
+
+def clip(s, limit=SENSE_MAX):
+    """单个义项太长就按标点收口，绝不切在字中间。
+
+    典型是 stem 的 abbr. 行，后面拖着一整串英文全称；
+    括号没闭合时直接从那个左括号断开。
+    """
+    if len(s) <= limit:
+        return s
+    head = s[:limit]
+    for op, cl in (("（", "）"), ("(", ")")):
+        if head.count(op) > head.count(cl):
+            head = head[: head.rfind(op)]
+    for p in ("，", "、", "；", ",", ";"):
+        i = head.rfind(p)
+        if i >= limit * 0.4:
+            head = head[:i]
+            break
+    return head.strip(" ，、；,;") or s[:limit].strip()
+
+
+def is_noise(s):
+    """人名地名、词典标记，以及「<英>瓦利」这种纯译名。"""
+    if "【" in s or any(n in s for n in NAME_WORDS):
+        return True
+    core = MARKUP_RE.sub("", s).strip()
+    if not core:
+        return True
+    # 只对 `<英>瓦利` 这类带语体标记的纯译名下手；
+    # 「（一件）衣服」这种整体带括号的真义项得留着（garment 就吃过亏）
+    return "<" in s and len(core) <= 2
+
+
 def short_meanings(data, limit=3):
-    """摘出「词性 + 简短释义」，滤掉人名地名等词典噪声。"""
+    """摘出「词性 + 释义」，按长度预算收完整的义项。
+
+    必须先把整行按分号拆成义项再逐条过滤——整行判断会把 valley
+    （「n. 山谷…；流域…；（Valley）人名；<英>瓦利」）的释义全丢掉。
+
+    也不能只取第一个义项：departure 有道给的是「n. 背离；离开，启程」，
+    只要「背离」就漏掉了最常用的意思。改成按预算收取，够用又完整。
+    """
     out = []
     ec = data.get("ec") or {}
     for block in (ec.get("word") or [])[:1]:
         for item in block.get("trs", []):
             for lines in item.get("tr") or []:
-                s = "".join(lines.get("l", {}).get("i", []) or []).strip()
-                if not s or "【" in s or "人名" in s or "地名" in s:
+                line = "".join(lines.get("l", {}).get("i", []) or []).strip()
+                if not line:
                     continue
-                s = re.split(r"[；;]", s)[0]
-                s = re.sub(r"^([a-z]+\.)\s*", r"\1 ", s)
-                s = s[:20].strip()
-                if s and s not in out:
-                    out.append(s)
+                m = re.match(r"^([a-z]+\.)\s*", line)
+                pos = (m.group(1) + " ") if m else ""
+                body = line[m.end():] if m else line
+                picked, total = [], 0
+                for sense in re.split(r"[；;]", body):
+                    sense = clean_sense(sense)
+                    if not sense or is_noise(sense):
+                        continue
+                    sense = clip(sense)
+                    # 到量就停，停在义项边界上
+                    if picked and total + len(sense) > SENSE_BUDGET:
+                        break
+                    picked.append(sense)
+                    total += len(sense)
+                if not picked:
+                    continue
+                row = pos + "；".join(picked)
+                if row not in out:
+                    out.append(row)
                 if len(out) >= limit:
                     return out
     return out

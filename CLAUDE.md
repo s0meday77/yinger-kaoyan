@@ -21,13 +21,13 @@
 │   ├── app.js                状态 / 发音 / 页天导航 / boot
 │   ├── list.js               点听列表渲染
 │   ├── practice.js           听写 / 错词本 / toast
-│   ├── sw.js                 Service Worker（当前 VER=v9）
+│   ├── sw.js                 Service Worker（当前 VER=v19）
 │   ├── manifest.webmanifest  添加到主屏幕用
 │   ├── icons/                应用图标
 │   └── data/
 │       ├── words.json        词库（含音标、释义、所属类别/页/天）
 │       ├── words.js          同上，包成 window.__WORDS__，给 file:// 用
-│       └── audio/{us,uk}/    971×2 个有道真人录音
+│       └── audio/{us,uk}/    1606×2 个有道真人录音
 ├── src/
 │   ├── photos/               教材照片原图
 │   ├── words.txt             词表（`# 类别 · Word List N` 分段 + 每行一词）
@@ -49,7 +49,7 @@
 类别（高频/中频/低频/偶考/基础/补充）
   └─ 教材页（Word List N）
        └─ 页内第几天（每页固定 4 天）
-            └─ 全局第 N 天（12 页 × 4 = 48 天）
+            └─ 全局第 N 天（每类各自从第 1 天排：高频 48 天、中频 36 天）
 ```
 
 **必须先按教材页汇总，再在页内分天，绝不能跨页混排天数。** 用户原话——"你这样搞我会乱的啊，我怎么对着教材学啊"。他要翻着纸质教材一页一页对。
@@ -59,7 +59,7 @@
 | 类别 | 词数 | 页数 | 天数 | 状态 |
 |---|---|---|---|---|
 | 高频词 | 971 | 12 | 48 | ✅ 完成 |
-| 中频词 | — | — | — | 待导入 |
+| 中频词 | 635 | 9 | 36 | ✅ 完成 |
 | 低频词 | — | — | — | 待导入 |
 | 偶考词 | — | — | — | 待导入 |
 | 基础词 | — | — | — | 待导入 |
@@ -71,7 +71,7 @@
 **仓库：<https://github.com/s0meday77/yinger-kaoyan>**（完整源码仓库，`app/` 由 GitHub Actions 发布到 Pages）
 
 iPhone Safari 打开 → 添加到主屏幕 → 从图标进 App → ⚙ 设置 → **📥 打包到手机**。
-打包会把 1942 个音频灌进 Cache Storage，之后**彻底离线**：不用电脑、不用联网、不用开服务器。
+打包会把 3212 个音频灌进 Cache Storage，之后**彻底离线**：不用电脑、不用联网、不用开服务器。
 
 详见 `手机安装说明.md`，二维码在 `二维码.png`。
 
@@ -129,8 +129,11 @@ cd /Users/diting/英二考研
 # 1. OCR（vision_ocr 需要 pyobjc，用专用 venv）
 /tmp/ocrvenv/bin/python -I tools/ocr/vision_ocr.py src/photos/<新照片目录>/
 
-# 2. 版面重建 → src/words.txt（会追加到现有词表，按类别分段）
-python3 -I tools/ocr/parse_ocr.py
+# 2. 版面重建 → 按教材页分段（--seq：每类从 Word List 1 重新编号）
+python3 -I tools/ocr/parse_ocr.py src/ocr_<类别>.json --segment 中频词 --seq \
+    --first-list 1 --out /tmp/中频词.txt
+#    逐页核对「识别词数 = 书上印的 /NN 词」，对不上必须人工查
+#    再追加进总词表（高频词部分不能动）
 
 # 3. 查词 + 下录音 → app/data/words.json
 python3 -I tools/build_words.py src/words.txt --out app/data/words.json --days-per-page 4
@@ -159,16 +162,58 @@ python3 -I tools/crosscheck.py app/data/words.json --out src/crosscheck.json
 4. **`audit.py` 本地体检** —— 音标合法性、音频大小/格式、MD5 串音（两个词共用一份录音）、重复词
 5. **`wordcheck.py` 词形校验** —— 对照系统词表 `/usr/share/dict/words`（23.6 万词，Webster's 第二版），专抓"认成另一个不存在的词"这类错
 
+## 释义怎么保证准（2026-10-29 修订）
+
+`build_words.py` 的 `short_meanings()` 有三条铁律，改之前务必看懂：
+
+| 规则 | 踩过的坑 |
+|---|---|
+| **先按「；」拆义项，再逐条过滤噪声** | 整行判断会把 `valley` 的释义全丢掉（那行末尾带「（Valley）人名」） |
+| **按长度预算收义项（`SENSE_BUDGET=24`），停在义项边界** | 原来 `s[:20]` 硬切，把 `suffer` 切成「受苦，受折」、`judgement` 切成「（同 judgme」 |
+| **不能只取第一个义项** | `departure` 有道第一义项是「背离」，最常用的「离开，启程」被漏掉 |
+
+单个义项超过 30 字（`SENSE_MAX`）用 `clip()` 按标点收口，括号没闭合就从左括号断开
+（`stem` 的 abbr. 行后面拖着一整串英文全称就是这种情况）。
+
+噪声过滤只针对带 `<英>/<美>` 标记且去掉标记后≤2 字的纯译名（`<英>瓦利`），
+**不能**误伤「（一件）衣服」这种整体带括号的真义项（`garment` 就吃过这个亏）。
+
 2026-10-29 首次全量结果：971 词全部通过前四项；第五项只有 12 个"查不到"，
 逐个核对全是合理的英式拼写（centre/judgement/sceptical/theatre/endeavour/fulfil）
 或现代词（automation/airline/database），美式对应写法在词表里都有，**没有一个怪词**。
+
+中频词 635 词累加后共 1606 词，复检结论一致：0 空释义、0 缺音标、0 缺录音、释义与有道缓存重算 0 差异。
+
+## OCR 实战踩坑（2026-10-29 中频词 9 页）
+
+`parse_ocr.py` 因此加了这些能力，以后拍新类别直接用：
+
+| 参数/逻辑 | 解决什么 |
+|---|---|
+| `--segment 中频词 --seq --first-list 1` | 按页输出 `# 中频词 · Word List N` 段头；用户要求**每类从 1 重新编号**，不跟书上印的 13~21 |
+| `natural_key()` | 让 中2 排在 中10 前面 |
+| 旋转 270° 时翻转 x/y | 否则词序整个倒过来，用户照书对不上（第 7 页就是） |
+| 书上印了 `/NN 词` 就按词数精确截断 | 原来先按行距切尾，29 词 5 列这种短表会被切掉一半（第 6 页 16/29） |
+| 词形正则 `[A-Za-z][a-z'-]+$` | 放宽会把页眉装饰字当单词（`EAtSiaI` 挤掉了 `outlook`） |
+| 低置信(<0.6) 且不在 `/usr/share/dict/words` 才剔 | 剔掉 `miathiziz`/`toster`，但保留 `spy`/`mock`/`reap` 这类低置信真词 |
+| 页内去重 | 页面底部讲解区会把首词再印一遍 |
+
+**双遍 OCR 必须做**：一遍普通、一遍 `--correct`（语言纠错），逐页 diff。
+中频词 9 页里 7 页完全一致，2 页差异全部人工核实。
+
+**人工修正记录（中频词）**：
+- 第 2 页 `contirm→confirm`、`interterence→interference`、`intertere→interfere`、`sacritice→sacrifice`（fibre 是英式拼写，保留）
+- 第 8 页 `toster→foster`、补回漏掉的 `loom`（靠「书上 74 vs 识别 73」发现的）
+
+**教训**：词数对不上、或词表里出现"形近但不像词"的东西，一定是 OCR 错了。
+`wordcheck.py` 只能抓「认成不存在的词」，**认成另一个真词的错只能靠双遍 OCR + 逐页目视**。
 
 ## 前端铁律
 
 **`<script>` 加载顺序：`data/words.js` → `ui.js` → `app.js` → `list.js` → `practice.js`**
 
 - `ui.js` 必须第一，否则 `boot()` 同步执行 `applyTheme()` 时 `BAR_COLOR` 处在 TDZ 会崩
-- 录音存在固定名 `audio-v1` 缓存里，**不跟版本号走**——发新版不能清掉用户打的 1942 个音频。
+- 录音存在固定名 `audio-v1` 缓存里，**不跟版本号走**——发新版不能清掉用户打的 3212 个音频。
   `activate` 里会把旧版缓存中的录音迁移过来，用户不必重新打包
 - iOS 播音频会发 Range 分段请求，缓存里只有整段 → 必须 `fetch` 取整段转 blob 再播，
   同时 SW 侧手动切出 206 响应。否则离线时只有碰巧播过的词有声音
