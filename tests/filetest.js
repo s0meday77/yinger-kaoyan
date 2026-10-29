@@ -2,7 +2,7 @@
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 const path = require('path');
-const APP = '/Users/diting/考研英二/app';
+const APP = path.join(__dirname, '..', 'app');
 let html = fs.readFileSync(path.join(APP, 'index.html'), 'utf8');
 
 let order = [];

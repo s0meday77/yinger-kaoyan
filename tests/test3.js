@@ -2,7 +2,7 @@ const { JSDOM } = require('jsdom');
 const fs = require('fs');
 const path = require('path');
 
-const APP = '/Users/diting/考研英二/app';
+const APP = path.join(__dirname, '..', 'app');
 const html = fs.readFileSync(path.join(APP, 'index.html'), 'utf8');
 const data = JSON.parse(fs.readFileSync(path.join(APP, 'data/words.json'), 'utf8'));
 
