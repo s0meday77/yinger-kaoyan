@@ -289,7 +289,7 @@ function bind() {
   });
 
   const sheet = $('#sheet');
-  $('#settingsBtn').addEventListener('click', () => { a2hsClose(); renderThemes(); sheet.hidden = false; });
+  $('#settingsBtn').addEventListener('click', () => { renderThemes(); sheet.hidden = false; });
   $('#closeSheet').addEventListener('click', () => { sheet.hidden = true; });
   sheet.addEventListener('click', (e) => { if (e.target === sheet) sheet.hidden = true; });
   $('#optAccent').addEventListener('change', (e) => {
@@ -419,7 +419,6 @@ async function boot() {
   } catch (e) { /* 本地文件打开时离线缓存本来也用不上 */ }
 
   offlineSetup();
-  a2hsSetup();
 }
 
 // 一定要等所有 <script> 都执行完再启动：

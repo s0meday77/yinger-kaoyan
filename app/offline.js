@@ -52,7 +52,6 @@ function offlineSetup() {
   });
 
   btn.addEventListener('click', async () => {
-    a2hsClose();                       // 会用打包功能了，安装提示就不用再挡着了
     btn.disabled = true;
     st.textContent = '准备中…';
     try {
@@ -75,33 +74,6 @@ function offlineSetup() {
   }).catch(() => {});
 }
 
-/* ---------------- 添加到主屏幕提示 ---------------- */
-/** 关掉「添加到主屏幕」提示，并且以后再也不出现 */
-function a2hsClose() {
-  const el = $('#a2hs');
-  if (el) el.hidden = true;
-  try { localStorage.setItem('kaoyan_a2hs', '1'); } catch (e) { /* 存不住也不影响关闭 */ }
-}
-
-function a2hsSetup() {
-  const el = $('#a2hs');
-  if (!el) return;
-  let seen = false;
-  try { seen = localStorage.getItem('kaoyan_a2hs') === '1'; } catch (e) { /* 忽略 */ }
-  const mq = (q) => !!(window.matchMedia && window.matchMedia(q).matches);
-  // 已经是从桌面图标打开的独立 App，就不该再提示
-  const standalone = window.navigator.standalone === true
-    || mq('(display-mode: standalone)')
-    || mq('(display-mode: fullscreen)')
-    || mq('(display-mode: minimal-ui)');
-  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  if (standalone || seen || !isIOS) { el.hidden = true; return; }
-  el.hidden = false;
-  // 8 秒后自己收起来，绝不一直挡着单词（收起不记标记，下次打开还会提示一下）
-  const timer = setTimeout(() => { el.hidden = true; }, 8000);
-  // 点条上任何一个地方都能关，并且以后不再出现
-  el.addEventListener('click', () => { clearTimeout(timer); a2hsClose(); });
-  const btn = $('#a2hsClose');
-  if (btn) btn.addEventListener('click', (e) => { e.stopPropagation(); clearTimeout(timer); a2hsClose(); });
-}
+/* 2026-10-29：「添加到主屏幕」提示整条删掉了。
+   用户早就装到主屏幕了，这条提示只会一直挡着单词。 */
 

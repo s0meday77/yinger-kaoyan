@@ -1,5 +1,8 @@
 /* 离线缓存：外壳常驻，音频按需缓存 + 一键全量打包 */
-const VER = 'v16';
+const VER = 'v17';
+// 音频单独放一个固定名字的缓存，不跟版本号走：
+// 这样以后每次发新版，用户辛苦打包的 1942 个录音不会被清掉重来
+const AUDIO = 'audio-v1';
 // './' 也要缓存：从主屏幕图标启动时请求的是目录根，不是 index.html
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'list.js', 'ui.js', 'practice.js',
                'audio.js', 'offline.js',
@@ -18,7 +21,23 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.filter((k) => k !== VER).map((k) => caches.delete(k)));
+    // AUDIO 那个缓存留着——录音跟代码版本无关，删了用户就得重下 46MB
+    // 老版本（音频和外壳混在一起）里的录音先搬过来，别让用户白打一次包
+    for (const k of keys) {
+      if (k === VER || k === AUDIO) continue;
+      const old = await caches.open(k);
+      const audioReqs = (await old.keys()).filter((r) => r.url.includes('/audio/'));
+      if (audioReqs.length) {
+        const dst = await caches.open(AUDIO);
+        for (const r of audioReqs) {
+          try {
+            const resp = await old.match(r);
+            if (resp) await dst.put(r, resp);
+          } catch (err) { /* 搬不动就算了，打包时会重新下 */ }
+        }
+      }
+    }
+    await Promise.all(keys.filter((k) => k !== VER && k !== AUDIO).map((k) => caches.delete(k)));
     await self.clients.claim();
     // 装上新版本后直接把打开的页面重载一遍：
     // 否则页面还停在旧 JS 上，用户会觉得「怎么改都没变」
@@ -45,7 +64,7 @@ self.addEventListener('fetch', (e) => {
           const res = await fetch(req);
           if (res && res.ok) {
             const copy = res.clone();
-            caches.open(VER).then((c) => c.put(req, copy)).catch(() => {});
+            caches.open(AUDIO).then((c) => c.put(req, copy)).catch(() => {});
           }
           return res;
         } catch (err) {
@@ -94,7 +113,7 @@ self.addEventListener('fetch', (e) => {
 
 /* ---------------- 一键打包：把全部音频灌进缓存 ---------------- */
 async function cacheAll(urls, port) {
-  const cache = await caches.open(VER);
+  const cache = await caches.open(AUDIO);
   const total = urls.length;
   let done = 0;
   let fail = 0;
@@ -132,7 +151,7 @@ async function cacheAll(urls, port) {
 }
 
 async function reportStatus(urls, port) {
-  const cache = await caches.open(VER);
+  const cache = await caches.open(AUDIO);
   let have = 0;
   for (const u of urls) if (await cache.match(u)) have += 1;
   port && port.postMessage({ type: 'offline-status', have, total: urls.length });
