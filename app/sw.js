@@ -1,5 +1,5 @@
 /* 离线缓存：外壳常驻，音频按需缓存 + 一键全量打包 */
-const VER = 'v11';
+const VER = 'v12';
 // './' 也要缓存：从主屏幕图标启动时请求的是目录根，不是 index.html
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'list.js', 'ui.js', 'practice.js',
                'manifest.webmanifest', 'data/words.js', 'data/words.json',
