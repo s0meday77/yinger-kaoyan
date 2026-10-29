@@ -8,6 +8,12 @@ function offlineSetup() {
   const st = $('#offlineStatus');
   if (!btn || !st) return;
 
+  // 页面自身的版本（写死在 index.html 里），拿去和 SW 的缓存版本对照：
+  // 两个对不上就说明 HTML 还是旧的，一眼就能看出来
+  const meta = document.querySelector('meta[name="app-ver"]');
+  const pv = $('#pageVer');
+  if (pv && meta) pv.textContent = meta.getAttribute('content');
+
   // 双击本地文件打开时没有 Service Worker，打包功能用不了
   if (!('serviceWorker' in navigator) || location.protocol === 'file:') {
     st.textContent = '用网址打开时才能打包（双击文件不支持）';

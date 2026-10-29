@@ -1,5 +1,5 @@
 /* 离线缓存：外壳常驻，音频按需缓存 + 一键全量打包 */
-const VER = 'v17';
+const VER = 'v18';
 // 音频单独放一个固定名字的缓存，不跟版本号走：
 // 这样以后每次发新版，用户辛苦打包的 1942 个录音不会被清掉重来
 const AUDIO = 'audio-v1';
@@ -12,8 +12,10 @@ const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'list.js', 'ui.js', 'p
 self.addEventListener('install', (e) => {
   e.waitUntil((async () => {
     const c = await caches.open(VER);
-    // 逐个加，某个文件失败不影响整体
-    await Promise.all(SHELL.map((u) => c.add(u).catch(() => {})));
+    // 逐个加，某个文件失败不影响整体。
+    // 必须带 cache:'reload'——GitHub Pages 给 HTML 设了 max-age=600，
+    // 不加的话 cache.add 会把浏览器 HTTP 缓存里那份十分钟前的旧 HTML 存进来
+    await Promise.all(SHELL.map((u) => c.add(new Request(u, { cache: 'reload' })).catch(() => {})));
     await self.skipWaiting();
   })());
 });
@@ -92,9 +94,11 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // 外壳：网络优先（保证拿到新版），失败回落缓存
+  // 外壳：网络优先（保证拿到新版），失败回落缓存。
+  // 页面本体一律 cache:'reload' 绕过 HTTP 缓存——否则改了 HTML 用户十天半个月看不见
+  const opts = req.mode === 'navigate' ? { cache: 'reload' } : undefined;
   e.respondWith(
-    fetch(req).then((res) => {
+    fetch(req, opts).then((res) => {
       const copy = res.clone();
       caches.open(VER).then((c) => c.put(req, copy));
       return res;

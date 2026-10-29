@@ -414,7 +414,9 @@ async function boot() {
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (hadController && performance.now() < 8000) location.reload();
       });
-      navigator.serviceWorker.register('sw.js').catch(() => {});
+      // updateViaCache:'none' —— 每次启动都必须去服务器核对 sw.js，
+      // 不能被浏览器那 10 分钟的 HTTP 缓存糊弄过去
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
     }
   } catch (e) { /* 本地文件打开时离线缓存本来也用不上 */ }
 
