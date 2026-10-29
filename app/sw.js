@@ -1,5 +1,5 @@
 /* 离线缓存：外壳常驻，音频按需缓存 + 一键全量打包 */
-const VER = 'v15';
+const VER = 'v16';
 // './' 也要缓存：从主屏幕图标启动时请求的是目录根，不是 index.html
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'list.js', 'ui.js', 'practice.js',
                'audio.js', 'offline.js',
@@ -99,19 +99,27 @@ async function cacheAll(urls, port) {
   let done = 0;
   let fail = 0;
   let next = 0;
-  const CONC = 6;                       // 6 个并发，快又不至于把网络打爆
+  const CONC = 8;                       // 8 个并发，快又不至于把网络打爆
+
+  // 取回整段再写缓存：能顺手校验大小，避免把 404 的 HTML 当成录音存进去
+  async function grab(u) {
+    const r = await fetch(u, { cache: 'no-cache' });
+    if (!r || !r.ok) throw new Error('下载失败');
+    const buf = await r.arrayBuffer();
+    if (buf.byteLength < 500) throw new Error('文件不完整');
+    await cache.put(u, new Response(buf, { headers: { 'Content-Type': 'audio/mpeg' } }));
+  }
 
   async function worker() {
     while (next < urls.length) {
       const u = urls[next++];
-      try {
-        if (!(await cache.match(u))) {
-          const r = await fetch(u, { cache: 'no-cache' });
-          if (r && r.ok) await cache.put(u, r.clone());
-          else fail += 1;
+      if (!(await cache.match(u))) {
+        let ok = false;
+        // 网络抖一下就重试一次，别让一个词把整包卡住
+        for (let t = 0; t < 2 && !ok; t++) {
+          try { await grab(u); ok = true; } catch (err) { /* 下一轮重试 */ }
         }
-      } catch (err) {
-        fail += 1;
+        if (!ok) fail += 1;
       }
       done += 1;
       if (done % 10 === 0 || done === total) {
@@ -136,5 +144,8 @@ self.addEventListener('message', (e) => {
     e.waitUntil(cacheAll(d.urls, e.source));
   } else if (d.type === 'cache-status' && Array.isArray(d.urls)) {
     e.waitUntil(reportStatus(d.urls, e.source));
+  } else if (d.type === 'version') {
+    // 设置面板里显示版本号，用户一眼就能确认手机是不是跑着最新版
+    if (e.source) e.source.postMessage({ type: 'version', ver: VER });
   }
 });

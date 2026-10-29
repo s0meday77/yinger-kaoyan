@@ -19,10 +19,14 @@ function offlineSetup() {
 
   navigator.serviceWorker.addEventListener('message', (ev) => {
     const d = ev.data || {};
-    if (d.type === 'offline-progress') {
+    if (d.type === 'version') {
+      // 版本号由 Service Worker 报上来，能直接看出手机是不是跑着最新版
+      const v = $('#verLine');
+      if (v) v.textContent = d.ver;
+    } else if (d.type === 'offline-progress') {
       wrap.hidden = false;
       bar.style.width = ((d.done / Math.max(1, d.total)) * 100).toFixed(1) + '%';
-      st.textContent = '正在打包 ' + d.done + ' / ' + d.total;
+      st.textContent = '打包中 ' + d.done + ' / ' + d.total + '，别切走、别锁屏';
     } else if (d.type === 'offline-done') {
       wrap.hidden = false;
       bar.style.width = '100%';
@@ -40,7 +44,8 @@ function offlineSetup() {
         btn.textContent = '✅ 已打包';
         wrap.hidden = false;
         bar.style.width = '100%';
-      } else if (d.have > 0) {
+      } else {
+        // 0 也要显示出来——以前不显示，用户根本不知道打包到底成没成
         st.textContent = '已缓存 ' + d.have + ' / ' + d.total + ' 个发音';
       }
     }
@@ -61,10 +66,12 @@ function offlineSetup() {
     }
   });
 
-  // 启动时问一下已经存了多少
+  // 启动时问一下版本号和已经存了多少
   navigator.serviceWorker.ready.then((reg) => {
     const sw = reg.active || navigator.serviceWorker.controller;
-    if (sw) sw.postMessage({ type: 'cache-status', urls });
+    if (!sw) return;
+    sw.postMessage({ type: 'version' });
+    sw.postMessage({ type: 'cache-status', urls });
   }).catch(() => {});
 }
 
