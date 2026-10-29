@@ -484,10 +484,12 @@ function a2hsSetup() {
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
   if (standalone || seen || !isIOS) { el.hidden = true; return; }
   el.hidden = false;
-  // 点条上任何一个地方都能关，不用非得瞄准小按钮
-  el.addEventListener('click', a2hsClose);
+  // 8 秒后自己收起来，绝不一直挡着单词（收起不记标记，下次打开还会提示一下）
+  const timer = setTimeout(() => { el.hidden = true; }, 8000);
+  // 点条上任何一个地方都能关，并且以后不再出现
+  el.addEventListener('click', () => { clearTimeout(timer); a2hsClose(); });
   const btn = $('#a2hsClose');
-  if (btn) btn.addEventListener('click', (e) => { e.stopPropagation(); a2hsClose(); });
+  if (btn) btn.addEventListener('click', (e) => { e.stopPropagation(); clearTimeout(timer); a2hsClose(); });
 }
 
 /* ---------------- 启动 ---------------- */

@@ -1,5 +1,5 @@
 /* 离线缓存：外壳常驻，音频按需缓存 + 一键全量打包 */
-const VER = 'v13';
+const VER = 'v14';
 // './' 也要缓存：从主屏幕图标启动时请求的是目录根，不是 index.html
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'list.js', 'ui.js', 'practice.js',
                'manifest.webmanifest', 'data/words.js', 'data/words.json',
@@ -15,11 +15,15 @@ self.addEventListener('install', (e) => {
 });
 
 self.addEventListener('activate', (e) => {
-  e.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== VER).map((k) => caches.delete(k)))
-    ).then(() => self.clients.claim())
-  );
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((k) => k !== VER).map((k) => caches.delete(k)));
+    await self.clients.claim();
+    // 装上新版本后直接把打开的页面重载一遍：
+    // 否则页面还停在旧 JS 上，用户会觉得「怎么改都没变」
+    const clients = await self.clients.matchAll({ type: 'window' });
+    clients.forEach((c) => { try { c.navigate(c.url); } catch (err) { /* 忽略 */ } });
+  })());
 });
 
 self.addEventListener('fetch', (e) => {
