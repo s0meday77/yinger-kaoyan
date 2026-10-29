@@ -1,0 +1,17 @@
+{
+  "name": "kaoyan-yinger-tests",
+  "version": "1.0.0",
+  "description": "考研英二 App 前端回归测试（jsdom）",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test3.js",
+    "test:file": "node filetest.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "jsdom": "^29.1.1"
+  }
+}

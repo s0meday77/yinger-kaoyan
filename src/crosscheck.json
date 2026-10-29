@@ -1,0 +1,356 @@
+{
+ "missing": [
+  "interact",
+  "dose",
+  "genetic",
+  "habitat",
+  "announce",
+  "behalf",
+  "character",
+  "relative"
+ ],
+ "differ": [
+  {
+   "w": "alter",
+   "ours": "ˈɔːltər",
+   "theirs": "/ˈɑl.tɚ/",
+   "score": 0.4
+  },
+  {
+   "w": "automation",
+   "ours": "ˌɔːtəˈmeɪʃ(ə)n",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "certain",
+   "ours": "ˈsɜːrt(ə)n",
+   "theirs": "/ˈsɝtn̩/",
+   "score": 0.5
+  },
+  {
+   "w": "casual",
+   "ours": "ˈkæʒuəl",
+   "theirs": "/ˈkɛʒɘl/",
+   "score": 0.5
+  },
+  {
+   "w": "corporation",
+   "ours": "ˌkɔːrpəˈreɪʃ(ə)n",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "decrease",
+   "ours": "dɪˈkriːs",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "cure",
+   "ours": "kjʊr",
+   "theirs": "/kɜː(ɹ)/",
+   "score": 0.5
+  },
+  {
+   "w": "estimate",
+   "ours": "ˈestɪmət",
+   "theirs": "/ˈɛstɨmɨt/",
+   "score": 0.5
+  },
+  {
+   "w": "exhibit",
+   "ours": "ɪɡˈzɪbɪt",
+   "theirs": "/ɛɡ-/",
+   "score": 0.2
+  },
+  {
+   "w": "reject",
+   "ours": "rɪˈdʒekt",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "legitimate",
+   "ours": "lɪˈdʒɪtɪmət",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "analyse",
+   "ours": "ˈænəlaɪz",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "committee",
+   "ours": "kəˈmɪti",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "monitor",
+   "ours": "ˈmɑːnɪtər",
+   "theirs": "/ˈmɒnɨtə/",
+   "score": 0.571
+  },
+  {
+   "w": "obesity",
+   "ours": "oʊˈbiːsəti",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "impact",
+   "ours": "ˈɪmpækt",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "transport",
+   "ours": "ˈtrænspɔːrt",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "personality",
+   "ours": "ˌpɜːrsəˈnæləti",
+   "theirs": "/-i/",
+   "score": 0.1
+  },
+  {
+   "w": "complex",
+   "ours": "kəmˈpleks",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "appropriate",
+   "ours": "əˈproʊpriət",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "pure",
+   "ours": "pjʊr",
+   "theirs": "/ˈpjɔː/",
+   "score": 0.5
+  },
+  {
+   "w": "quarter",
+   "ours": "ˈkwɔːrtər",
+   "theirs": "/ˈkoː.tɘ/",
+   "score": 0.333
+  },
+  {
+   "w": "sceptical",
+   "ours": "ˈskeptɪk(ə)l",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "segment",
+   "ours": "ˈseɡmənt",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "speculate",
+   "ours": "ˈspekjuleɪt",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "circumstance",
+   "ours": "ˈsɜːrkəmstæns",
+   "theirs": "/-æns/",
+   "score": 0.333
+  },
+  {
+   "w": "assure",
+   "ours": "əˈʃʊr",
+   "theirs": "/əˈʃɔː/",
+   "score": 0.5
+  },
+  {
+   "w": "contact",
+   "ours": "ˈkɑːntækt",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "theatre",
+   "ours": "ˈθiːətər",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "attribute",
+   "ours": "əˈtrɪbjuːt",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "obvious",
+   "ours": "ˈɑːbviəs",
+   "theirs": "/ˈɒ.vɪəs/",
+   "score": 0.5
+  },
+  {
+   "w": "evidence",
+   "ours": "ˈevɪdəns",
+   "theirs": "[ˈɛvəɾəns]",
+   "score": 0.571
+  },
+  {
+   "w": "virtue",
+   "ours": "ˈvɜːrtʃuː",
+   "theirs": "/-tjuː/",
+   "score": 0.333
+  },
+  {
+   "w": "aircraft",
+   "ours": "ˈerkræft",
+   "theirs": "/ɛə.kɹɑːft/",
+   "score": 0.571
+  },
+  {
+   "w": "airline",
+   "ours": "ˈerlaɪn",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "elsewhere",
+   "ours": "ˈelsˌwer",
+   "theirs": "/ˌɛlsˈʍɛːə/",
+   "score": 0.4
+  },
+  {
+   "w": "overall",
+   "ours": "ˌoʊvərˈɔːl",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "ownership",
+   "ours": "ˈoʊnərʃɪp",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "undergraduate",
+   "ours": "ˌʌndərˈɡrædʒuət",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "upset",
+   "ours": "ˌʌpˈset",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "widespread",
+   "ours": "ˌwaɪdˈspred",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "affair",
+   "ours": "əˈfer",
+   "theirs": "/əˈfɛə/",
+   "score": 0.5
+  },
+  {
+   "w": "bear",
+   "ours": "ber",
+   "theirs": "/bɛə(ɹ)/",
+   "score": 0.5
+  },
+  {
+   "w": "circuit",
+   "ours": "ˈsɜːrkɪt",
+   "theirs": "[ˈsəɾ.kɪʈ]",
+   "score": 0.5
+  },
+  {
+   "w": "engineer",
+   "ours": "ˌendʒɪˈnɪr",
+   "theirs": "/ˌɛnd͡ʒɪˈnɪə/",
+   "score": 0.571
+  },
+  {
+   "w": "fulfil",
+   "ours": "fʊlˈfɪl",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "increasingly",
+   "ours": "ɪnˈkriːsɪŋli",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "mere",
+   "ours": "mɪr",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "odd",
+   "ours": "ɑːd",
+   "theirs": "/ɒd/",
+   "score": 0.5
+  },
+  {
+   "w": "offer",
+   "ours": "ˈɔːfər",
+   "theirs": "/ˈɑfɚ/",
+   "score": 0.25
+  },
+  {
+   "w": "permit",
+   "ours": "pərˈmɪt",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "poll",
+   "ours": "poʊl",
+   "theirs": "/pɔl/",
+   "score": 0.5
+  },
+  {
+   "w": "rare",
+   "ours": "rer",
+   "theirs": "[ɹɜɹ]",
+   "score": 0.5
+  },
+  {
+   "w": "recall",
+   "ours": "rɪˈkɔːl",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "respond",
+   "ours": "rɪˈspɑːnd",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "shortage",
+   "ours": "ˈʃɔːrtɪdʒ",
+   "theirs": "",
+   "score": 0.0
+  },
+  {
+   "w": "translation",
+   "ours": "trænzˈleɪʃ(ə)n",
+   "theirs": "/tɹæns-/",
+   "score": 0.4
+  }
+ ]
+}

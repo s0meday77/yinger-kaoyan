@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="theme-color" content="#f4f5f9">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="考研英二">
+<title>考研英二 · 每天一课</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-l">
+    <h1 id="dayTitle">Word List 1</h1>
+    <p class="sub" id="subLine">点一下单词就朗读 · 共 83 词</p>
+  </div>
+  <div class="hdr-r">
+    <div class="stats"><b id="doneNum">0</b> / <span id="totalNum">83</span> 已掌握</div>
+    <button class="icon-btn" id="settingsBtn" aria-label="设置">⚙</button>
+  </div>
+  <div class="prog"><i id="progBar"></i></div>
+</header>
+
+<nav class="catbar" id="catBar"></nav>
+<nav class="pagebar" id="pageBar"></nav>
+<nav class="daybar" id="dayBar"></nav>
+
+<main>
+  <!-- 点听 -->
+  <section id="tab-listen" class="tab-pane active">
+    <div class="toolbar">
+      <button id="btnShuffle">🔀 乱序</button>
+      <button id="btnReset">↺ 重置</button>
+      <label class="chip"><input type="checkbox" id="optMean" checked>释义</label>
+      <label class="chip"><input type="checkbox" id="optTwice">读两遍</label>
+      <label class="chip"><input type="checkbox" id="optUndone">只练未掌握</label>
+      <button id="chainBtn">▶ 连听</button>
+      <label class="chip speed">语速
+        <input type="range" id="rate" min="0.5" max="1.4" step="0.05" value="1">
+        <span class="val" id="rateVal">1.00</span>
+      </label>
+      <select id="accentSel"><option value="us">美音</option><option value="uk">英音</option></select>
+    </div>
+    <div class="row">
+      <input id="search" type="search" placeholder="搜索本课单词或释义" autocomplete="off">
+    </div>
+    <div id="wordList" class="list"></div>
+  </section>
+
+  <!-- 听写 -->
+  <section id="tab-dict" class="tab-pane">
+    <div class="dict-head">
+      <span class="counter" id="dictCounter">0 / 20</span>
+      <span class="acc" id="dictAcc">正确率 —</span>
+    </div>
+    <div class="dict-stage">
+      <button class="play-big" id="playBig" aria-label="播放读音">🔊</button>
+      <p class="hint" id="dictHint">听发音，把单词拼出来</p>
+      <div class="ipa-reveal" id="ipaReveal"></div>
+      <div class="answer-box">
+        <input id="dictInput" type="text" autocomplete="off" autocorrect="off"
+               autocapitalize="none" spellcheck="false" placeholder="输入你听到的单词">
+        <button id="dictSubmit" class="submit">确认</button>
+      </div>
+      <div class="feedback" id="feedback"></div>
+      <div class="dict-actions">
+        <button class="ghost" id="btnReveal">看答案</button>
+        <button class="ghost" id="btnSkip">跳过</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 错词 -->
+  <section id="tab-wrong" class="tab-pane">
+    <div class="wrong-head">
+      <div>
+        <h2>错词本</h2>
+        <p class="sub" id="wrongSub">答错的词会攒在这里</p>
+      </div>
+      <div class="wrong-acts">
+        <button class="pill" id="reviewBtn">开始复习</button>
+        <button class="pill danger" id="clearWrong">清空</button>
+      </div>
+    </div>
+    <div id="wrongList" class="list"></div>
+  </section>
+</main>
+
+<nav class="tabbar">
+  <button class="tab active" data-tab="listen"><span>📖</span>点听</button>
+  <button class="tab" data-tab="dict"><span>✍️</span>听写</button>
+  <button class="tab" data-tab="wrong"><span>🔁</span>错词<i id="wrongBadge" class="badge" hidden>0</i></button>
+</nav>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-panel">
+    <h3>设置</h3>
+
+    <p class="group">离线打包</p>
+    <div class="opt col">
+      <span>打包到手机后：<b>不用联网、不用开电脑</b>，点开就能全功能使用</span>
+      <button class="submit wide" id="offlineBtn">📥 打包到手机</button>
+      <div class="offline-bar" id="offlineBarWrap" hidden><i id="offlineBar"></i></div>
+      <span class="sub" id="offlineStatus">联网状态下点一次即可（约 46MB）</span>
+    </div>
+
+    <p class="group">发音</p>
+    <label class="opt"><span>口音</span>
+      <select id="optAccent"><option value="us">美音</option><option value="uk">英音</option></select>
+    </label>
+    <label class="opt"><span>语速</span>
+      <input type="range" id="optRate" min="0.6" max="1.2" step="0.05" value="1">
+      <b id="optRateVal">1.00×</b>
+    </label>
+    <label class="opt"><span>每词朗读</span>
+      <select id="optRepeats">
+        <option value="1">1 遍</option>
+        <option value="2">2 遍（推荐）</option>
+        <option value="3">3 遍</option>
+      </select>
+    </label>
+
+    <p class="group">点听</p>
+    <label class="opt switch"><span>释义点开才看 <em>先记意思，别被中文带跑</em></span>
+      <input type="checkbox" id="optHideMeaning">
+    </label>
+    <label class="opt switch"><span>听音猜词 <em>先遮住单词，听完再显</em></span>
+      <input type="checkbox" id="optCoverWord">
+    </label>
+    <label class="opt switch"><span>打乱顺序 <em>别按书的顺序死记</em></span>
+      <input type="checkbox" id="optShuffle">
+    </label>
+
+    <p class="group">听写</p>
+    <label class="opt switch"><span>显示音标提示</span>
+      <input type="checkbox" id="optShowIpa">
+    </label>
+    <label class="opt switch"><span>答对自动下一题</span>
+      <input type="checkbox" id="optAutoNext" checked>
+    </label>
+    <label class="opt switch"><span>答错自动重播</span>
+      <input type="checkbox" id="optReplayWrong" checked>
+    </label>
+    <label class="opt switch"><span>答错必须重打 <em>错一次打三遍，忘不掉</em></span>
+      <input type="checkbox" id="optMustRetype">
+    </label>
+
+    <p class="group">外观</p>
+    <div class="opt col"><span>背景皮肤</span>
+      <div class="themes" id="themePick"></div>
+    </div>
+
+    <button class="ghost wide" id="resetProgress">清空全部进度</button>
+    <button class="submit wide" id="closeSheet">完成</button>
+  </div>
+</div>
+
+<div class="a2hs" id="a2hs" hidden>
+  <span>点底部 <b>分享</b>（方框↑）→ <b>添加到主屏幕</b>，就能像 App 一样一点就开</span>
+  <button id="a2hsClose">知道了</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- 词库用 script 标签加载：这样双击打开本地文件也能用（fetch 在 file:// 下会被拦） -->
+<script src="data/words.js"></script>
+<!-- ui.js 必须先加载：app.js 的 boot() 一执行就会读皮肤配色 -->
+<script src="ui.js"></script>
+<script src="app.js"></script>
+<script src="list.js"></script>
+<script src="practice.js"></script>
+</body>
+</html>
