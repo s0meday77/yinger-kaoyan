@@ -336,7 +336,7 @@ function bind() {
   });
 
   const sheet = $('#sheet');
-  $('#settingsBtn').addEventListener('click', () => { renderThemes(); sheet.hidden = false; });
+  $('#settingsBtn').addEventListener('click', () => { a2hsClose(); renderThemes(); sheet.hidden = false; });
   $('#closeSheet').addEventListener('click', () => { sheet.hidden = true; });
   sheet.addEventListener('click', (e) => { if (e.target === sheet) sheet.hidden = true; });
   $('#optAccent').addEventListener('change', (e) => {
@@ -441,6 +441,7 @@ function offlineSetup() {
   });
 
   btn.addEventListener('click', async () => {
+    a2hsClose();                       // 会用打包功能了，安装提示就不用再挡着了
     btn.disabled = true;
     st.textContent = '准备中…';
     try {
@@ -462,20 +463,31 @@ function offlineSetup() {
 }
 
 /* ---------------- 添加到主屏幕提示 ---------------- */
+/** 关掉「添加到主屏幕」提示，并且以后再也不出现 */
+function a2hsClose() {
+  const el = $('#a2hs');
+  if (el) el.hidden = true;
+  try { localStorage.setItem('kaoyan_a2hs', '1'); } catch (e) { /* 存不住也不影响关闭 */ }
+}
+
 function a2hsSetup() {
   const el = $('#a2hs');
   if (!el) return;
   let seen = false;
   try { seen = localStorage.getItem('kaoyan_a2hs') === '1'; } catch (e) { /* 忽略 */ }
+  const mq = (q) => !!(window.matchMedia && window.matchMedia(q).matches);
+  // 已经是从桌面图标打开的独立 App，就不该再提示
   const standalone = window.navigator.standalone === true
-    || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    || mq('(display-mode: standalone)')
+    || mq('(display-mode: fullscreen)')
+    || mq('(display-mode: minimal-ui)');
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  if (standalone || seen || !isIOS) return;
+  if (standalone || seen || !isIOS) { el.hidden = true; return; }
   el.hidden = false;
-  $('#a2hsClose').addEventListener('click', () => {
-    el.hidden = true;
-    try { localStorage.setItem('kaoyan_a2hs', '1'); } catch (e) { /* 忽略 */ }
-  });
+  // 点条上任何一个地方都能关，不用非得瞄准小按钮
+  el.addEventListener('click', a2hsClose);
+  const btn = $('#a2hsClose');
+  if (btn) btn.addEventListener('click', (e) => { e.stopPropagation(); a2hsClose(); });
 }
 
 /* ---------------- 启动 ---------------- */
@@ -549,7 +561,14 @@ async function boot() {
 
   // file:// 下有的浏览器会直接抛 DOMException，包一层别让它中断启动
   try {
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+    if ('serviceWorker' in navigator) {
+      // 有新版本接管时自动刷新一次，省得用户关两次才看到更新
+      const hadController = !!navigator.serviceWorker.controller;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (hadController && performance.now() < 8000) location.reload();
+      });
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
   } catch (e) { /* 本地文件打开时离线缓存本来也用不上 */ }
 
   offlineSetup();
