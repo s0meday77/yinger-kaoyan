@@ -1,7 +1,8 @@
 /* 离线缓存：外壳常驻，音频按需缓存 + 一键全量打包 */
-const VER = 'v14';
+const VER = 'v15';
 // './' 也要缓存：从主屏幕图标启动时请求的是目录根，不是 index.html
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'list.js', 'ui.js', 'practice.js',
+               'audio.js', 'offline.js',
                'manifest.webmanifest', 'data/words.js', 'data/words.json',
                'icons/icon-192.png', 'icons/icon-512.png'];
 
@@ -32,15 +33,43 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;
 
-  // 音频：缓存优先，听过就离线可用
+  // 音频：缓存优先，听过就离线可用。
+  // 媒体元素会发 Range（bytes=a-b）请求，缓存里只有整段，得手动切出 206 回给它，
+  // 否则 iOS 上离线播放会一声不吭地失败。
   if (url.pathname.includes('/audio/')) {
-    e.respondWith(
-      caches.match(req).then((hit) => hit || fetch(req).then((res) => {
-        const copy = res.clone();
-        caches.open(VER).then((c) => c.put(req, copy));
-        return res;
-      }))
-    );
+    e.respondWith((async () => {
+      let hit = null;
+      try { hit = await caches.match(req, { ignoreVary: true, ignoreSearch: true }); } catch (err) { hit = null; }
+      if (!hit) {
+        try {
+          const res = await fetch(req);
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(VER).then((c) => c.put(req, copy)).catch(() => {});
+          }
+          return res;
+        } catch (err) {
+          return Response.error();
+        }
+      }
+      const range = req.headers.get('range');
+      if (!range) return hit;
+      const buf = await hit.arrayBuffer();
+      const m = /bytes=(\d*)-(\d*)/.exec(range);
+      const start = m && m[1] ? parseInt(m[1], 10) : 0;
+      const end = m && m[2] ? parseInt(m[2], 10) : buf.byteLength - 1;
+      const chunk = buf.slice(start, Math.min(end, buf.byteLength - 1) + 1);
+      return new Response(chunk, {
+        status: 206,
+        statusText: 'Partial Content',
+        headers: {
+          'Content-Type': hit.headers.get('Content-Type') || 'audio/mpeg',
+          'Content-Range': 'bytes ' + start + '-' + (start + chunk.byteLength - 1) + '/' + buf.byteLength,
+          'Content-Length': String(chunk.byteLength),
+          'Accept-Ranges': 'bytes',
+        },
+      });
+    })());
     return;
   }
 

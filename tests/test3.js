@@ -10,9 +10,14 @@ const dom = new JSDOM(html, { url: 'http://localhost:8766/', runScripts: 'outsid
 const { window } = dom;
 
 window.fetch = async (url) => {
-  if (String(url).includes('words.json')) return { json: async () => data };
-  throw new Error('unexpected fetch ' + url);
+  const u = String(url);
+  if (u.includes('words.json')) return { json: async () => data };
+  // 播放时改成 fetch 取整段音频再播（绕开 iOS 的分段请求问题），这里给个假 blob
+  if (u.includes('/audio/')) return { ok: true, blob: async () => ({ size: 5000 }) };
+  throw new Error('unexpected fetch ' + u);
 };
+window.URL.createObjectURL = () => 'blob:test';
+window.URL.revokeObjectURL = () => {};
 const played = [];
 window.Audio = class {
   constructor(src) { this.src = src; this.playbackRate = 1; played.push(src); }
@@ -25,7 +30,7 @@ window.navigator.serviceWorker = { register: async () => {} };
 window.HTMLElement.prototype.scrollIntoView = function () {};
 
 window.eval(
-  ['ui.js', 'app.js', 'list.js', 'practice.js']
+  ['ui.js', 'audio.js', 'offline.js', 'app.js', 'list.js', 'practice.js']
     .map((f) => fs.readFileSync(path.join(APP, f), 'utf8'))
     .join('\n') + '\nwindow.__s = state;'
 );
@@ -65,7 +70,7 @@ const check = (n, c, e = '') => out.push(`${c ? '✅' : '❌'} ${n}${e ? ' — '
   played.length = 0;
   $$('#wordList .card')[0].click();
   await sleep(30);
-  check('点词播真人录音', (played[0] || '').includes('audio/us/'), played[0]);
+  check('点词播真人录音', played.length > 0 && String(played[0]).startsWith('blob:'), played[0] || '无');
 
   // 听写只覆盖当前页当前天
   window.document.querySelector('.tab[data-tab="dict"]').click();
