@@ -217,8 +217,36 @@ function renderCatBar() {
   });
 }
 
+/* ---------------- 回到顶部 ---------------- */
+// 单词页往下翻过一屏就浮出箭头，一点平滑滑回顶上（跟购物 App 一个手感）
+function setupToTop() {
+  const btn = $('#toTop');
+  if (!btn) return;
+  const sync = () => {
+    const onList = $('#tab-listen').classList.contains('active');
+    btn.classList.toggle('show', onList && window.scrollY > 360);
+  };
+  btn.addEventListener('click', () => {
+    const before = window.scrollY;
+    try {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (e) {
+      window.scrollTo(0, 0);
+    }
+    // 老内核不认 smooth：平滑没动起来就直接跳顶
+    setTimeout(() => {
+      if (window.scrollY >= before - 2) window.scrollTo(0, 0);
+    }, 350);
+  });
+  window.addEventListener('scroll', sync, { passive: true });
+  window.__toTopSync = sync;   // 切标签 / 换页后手动刷新一次
+  sync();
+}
+
 /* ---------------- 事件 ---------------- */
 function bind() {
+  setupToTop();
+
   document.querySelectorAll('.tab').forEach((btn) => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b === btn));
@@ -226,6 +254,7 @@ function bind() {
       $('#tab-' + btn.dataset.tab).classList.add('active');
       stopAudio(); stopChain();
       if (btn.dataset.tab === 'wrong') renderWrong();
+      if (window.__toTopSync) window.__toTopSync();
     });
   });
 

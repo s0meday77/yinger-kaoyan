@@ -253,6 +253,22 @@ const check = (n, c, e = '') => out.push(`${c ? '✅' : '❌'} ${n}${e ? ' — '
   await sleep(50);
   check('重打对了就通过', $('#feedback').textContent.includes('正确'), '');
 
+  // 回到顶部（购物 App 那种悬浮箭头）
+  window.document.querySelector('.tab[data-tab="listen"]').click();
+  await sleep(40);
+  let scrolledTo = null;
+  window.scrollTo = (a, b) => { scrolledTo = (a && typeof a === 'object') ? a.top : b; };
+  const toTop = $('#toTop');
+  check('回到顶部按钮默认隐藏', !toTop.classList.contains('show'), toTop.className);
+  Object.defineProperty(window, 'scrollY', { value: 800, configurable: true });
+  window.dispatchEvent(new window.Event('scroll'));
+  check('往下翻后浮出箭头', toTop.classList.contains('show'), toTop.className);
+  toTop.click();
+  check('点一下回顶', scrolledTo === 0, String(scrolledTo));
+  window.document.querySelector('.tab[data-tab="wrong"]').click();
+  await sleep(40);
+  check('错词页不显示箭头', !toTop.classList.contains('show'), toTop.className);
+
   // 数据完整性
   check('每天词数连续无空洞', (() => {
     for (const c of data.categories) {

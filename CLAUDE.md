@@ -21,7 +21,7 @@
 │   ├── app.js                状态 / 发音 / 页天导航 / boot
 │   ├── list.js               点听列表渲染
 │   ├── practice.js           听写 / 错词本 / toast
-│   ├── sw.js                 Service Worker（当前 VER=v19）
+│   ├── sw.js                 Service Worker（当前 VER=v20）
 │   ├── manifest.webmanifest  添加到主屏幕用
 │   ├── icons/                应用图标
 │   └── data/
@@ -219,6 +219,9 @@ python3 -I tools/crosscheck.py app/data/words.json --out src/crosscheck.json
   同时 SW 侧手动切出 206 响应。否则离线时只有碰巧播过的词有声音
 - `boot()` 必须等 `DOMContentLoaded` 再跑，否则 `bind()` 抢在 `practice.js` 之前执行 → `playCurrentDict is not defined`
 - `localStorage` 在 file:// 下可能抛异常，读写都要包 try/catch
+- 「回到顶部」箭头（`#toTop`，`setupToTop()`）只在**点听页**且 `scrollY > 360` 时显示，
+  切标签要调 `window.__toTopSync()` 重新算，否则在错词页也会浮着
+  滚动用 `scrollTo({behavior:'smooth'})`，350ms 后若没动起来就直接跳顶（老内核兜底）
 - 改前端后跑回归（首次需 `cd tests && npm i jsdom`）：
   ```bash
   cd /Users/diting/英二考研/tests && node test3.js      # 50 项功能断言
