@@ -154,6 +154,37 @@ python3 -I tools/crosscheck.py app/data/words.json --out src/crosscheck.json
 > `/tmp/ocrvenv` 是临时目录，重启后可能没了。重建：
 > `python3 -m venv /tmp/ocrvenv && /tmp/ocrvenv/bin/pip install pyobjc-framework-Vision pyobjc-framework-Quartz`
 
+## ⏭ 下次继续导入（交接清单）
+
+**已完成**：高频词 971（12 页 48 天）+ 中频词 635（9 页 36 天）= 1606 词 / 3212 音频 / 84 天，线上 v20。
+**剩余四类**：低频词 → 偶考词 → 基础词 → 补充词（顺序按用户给照片的顺序，别自己排）。
+
+每一步的判据（照做，不许跳）：
+
+| 步骤 | 必须看到的输出 | 对不上怎么办 |
+|---|---|---|
+| OCR | `src/ocr_<类别>.json` 生成 | venv 没了照上面重建 |
+| `parse_ocr.py` | 每页打印「识别 N ｜ 书上 M ｜ OK」 | 任何一页「不符」，**必须回看原图人工订正**，不许带着错往下走 |
+| 双遍 OCR | 再跑一遍加 `--correct`，逐页 diff | 差异必须人工判断（形近真词只能靠人眼） |
+| `build_words.py` | 「无音标 无 ｜ 缺音频 无」 | 有缺就去查有道缓存，别手写假数据 |
+| `audit.py` | 只剩 3 组同音词（principle/principal、check/cheque） | 多出任何一条都要查 |
+| `wordcheck.py` | 18 个以内，且全是英式拼写/现代词 | 出现「形近但不像词」就是 OCR 错了 |
+| `test3.js` | 55/55 | 新增类别要补断言 |
+| `filetest.js` | 页面版本显示新版本号 | — |
+
+**新类别落地还要一起改的四处**（漏一处用户就看不到）：
+1. `app/sw.js` 的 `VER` 加一位 + `app/index.html` 的 `<meta name="app-ver">` 同步
+2. `README.md` / 本文件「当前进度」表补一行
+3. 提交推 **两个仓库**：`yinger-kaoyan`（源码）+ `kaoyan-yinger`（用户手机在用）
+4. 告诉用户重新「📥 打包到手机」（音频数会变）
+
+**解析新类别时最容易翻车的三条**：
+- `--seq --first-list 1` 必须带，用户要求每类从 Word List 1 重排
+- 书上印的 `/NN 词` 是唯一裁决标准，识别数和它对不上就是错
+- 页内天数固定 4 天，绝不跨页混排（用户要照着纸质书翻页对）
+
+交接给下一个会话时，先读本文件 + `memory/英二考研项目.md`，再看 `git log --oneline -10` 对版本。
+
 ## 读音五重保障
 
 1. **每页 OCR 词数必须等于书上印的 "/NN 词"** —— 对不上就重扫
