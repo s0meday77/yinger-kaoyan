@@ -75,15 +75,42 @@ iPhone Safari 打开 → 添加到主屏幕 → 从图标进 App → ⚙ 设置 
 
 详见 `手机安装说明.md`，二维码在 `二维码.png`。
 
+**⚠️ 有两个站点，每次发版必须同时推：**
+
+| 仓库 | 地址 | 用途 |
+|---|---|---|
+| `s0meday77/yinger-kaoyan` | <https://s0meday77.github.io/yinger-kaoyan/> | 源码仓库，GitHub Actions 发布 |
+| `s0meday77/kaoyan-yinger` | <https://s0meday77.github.io/kaoyan-yinger/> | **小龙手机主屏图标实际指向这个** |
+
+2026-10-29 踩过的坑：新版全推到了 `yinger-kaoyan`，用户那个停在 v10，改了十几版他毫无变化。
+**以后每次发版两个都要推，漏一个等于白干。**
+
 **发布更新：**
 ```bash
 cd /Users/diting/英二考研
-# ⚠️ 改了 app/ 里的前端文件，一定要先把 app/sw.js 的 VER 往上加一位，
-#    否则手机上的旧缓存不会失效，用户看不到新版
+# ⚠️ 改了 app/ 里的前端文件，必须同时改两处版本号：
+#    app/sw.js 的 VER、app/index.html 的 <meta name="app-ver">
 git add -A && git commit -m "feat: <改动描述>" && git push
+
+# 同步到用户实际使用的仓库
+rsync -a --delete --exclude='.git' app/ /tmp/kyy-publish/
+cd /tmp/kyy-publish && git add -A && git commit -m "feat: <同一条>" && git push
 ```
-推送后 `.github/workflows/deploy.yml` 自动把 `app/` 发布到 Pages，约 20 秒~1 分钟生效。
-手机端从图标重开 App 即可拿到新版。
+
+**GitHub 22 端口在本机常连不通**，git 一律用：
+```bash
+git remote set-url origin ssh://git@ssh.github.com:443/s0meday77/<repo>.git
+```
+
+**⏱ GitHub Pages 的坑（2026-10-29 修复）**：所有文件都带 `Cache-Control: max-age=600`，
+浏览器会把 HTML 缓存十分钟。表现为「Service Worker 报新版本号，但页面还是老样子」——
+用户反复说"怎么弄都不更新"就是这个。已修：
+- `sw.js` 的 `fetch` 与 `cache.add` 对页面请求一律 `cache: 'reload'`
+- `register('sw.js', { updateViaCache: 'none' })`
+- 设置面板同时显示「页面 vX · 缓存 vY」，两者不一致就是 HTML 还旧
+
+推到 Pages 后约 20 秒~3 分钟生效（旧仓库 1942 个文件，legacy 构建慢些）。
+紧急情况想让手机立刻拿到新版：用 Safari 打开 `<地址>/?v=<任意数字>`（换 URL 绕开 HTTP 缓存），再回图标打开。
 
 > 仓库名用 `yinger-kaoyan` 不是中文「英二考研」：GitHub 会把纯中文仓库名规范化成 `-`，
 > 直接创建会报「Name already exists」，Pages 路径也会变成一串百分号编码。
@@ -141,6 +168,10 @@ python3 -I tools/crosscheck.py app/data/words.json --out src/crosscheck.json
 **`<script>` 加载顺序：`data/words.js` → `ui.js` → `app.js` → `list.js` → `practice.js`**
 
 - `ui.js` 必须第一，否则 `boot()` 同步执行 `applyTheme()` 时 `BAR_COLOR` 处在 TDZ 会崩
+- 录音存在固定名 `audio-v1` 缓存里，**不跟版本号走**——发新版不能清掉用户打的 1942 个音频。
+  `activate` 里会把旧版缓存中的录音迁移过来，用户不必重新打包
+- iOS 播音频会发 Range 分段请求，缓存里只有整段 → 必须 `fetch` 取整段转 blob 再播，
+  同时 SW 侧手动切出 206 响应。否则离线时只有碰巧播过的词有声音
 - `boot()` 必须等 `DOMContentLoaded` 再跑，否则 `bind()` 抢在 `practice.js` 之前执行 → `playCurrentDict is not defined`
 - `localStorage` 在 file:// 下可能抛异常，读写都要包 try/catch
 - 改前端后跑回归（首次需 `cd tests && npm i jsdom`）：

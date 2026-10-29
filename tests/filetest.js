@@ -36,6 +36,8 @@ setTimeout(() => {
     ' 类别:', d.querySelectorAll('.cat-chip').length);
   console.log('标题:', d.querySelector('#dayTitle').textContent, '|', d.querySelector('#subLine').textContent);
   console.log('统计:', d.querySelector('.stats').textContent.replace(/\s+/g, ' ').trim());
+  console.log('页面版本:', d.querySelector('#pageVer') ? d.querySelector('#pageVer').textContent : '无');
+  console.log('提示条:', d.querySelector('#a2hs') ? '还在（不对）' : '已移除 ✓');
   const c = d.querySelector('#wordList .card');
   console.log('第一张卡:', c ? c.textContent.replace(/\s+/g, ' ').trim().slice(0, 50) : '无');
 }, 900);
