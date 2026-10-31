@@ -31,7 +31,8 @@ function nextDict(autoPlay = true) {
   input.className = '';
   input.disabled = false;
   state.tries = 0;
-  $('#ipaReveal').textContent = state.showIpa && w ? '/' + (state.accent === 'uk' ? w.uk : w.us) + '/' : '';
+  const ipa = w ? (state.accent === 'uk' ? w.uk : w.us) : '';
+  $('#ipaReveal').textContent = state.showIpa && ipa ? '/' + ipa + '/' : '';
   $('#dictCounter').textContent = `${Math.min(state.qi + 1, state.queue.length)} / ${state.queue.length}`;
   $('#dictAcc').textContent = state.answered
     ? `正确率 ${Math.round((state.correct / state.answered) * 100)}%` : '正确率 —';
@@ -110,7 +111,8 @@ function revealAnswer() {
   save(); updateHeader();
   $('#dictInput').disabled = true;
   $('#feedback').innerHTML = `答案：<span class="right">${w.w}</span><br><span class="hint">${w.m}</span>`;
-  $('#ipaReveal').textContent = '/' + (state.accent === 'uk' ? w.uk : w.us) + '/';
+  const ipa = state.accent === 'uk' ? w.uk : w.us;
+  $('#ipaReveal').textContent = ipa ? '/' + ipa + '/' : '';
 }
 
 /* ---------------- 错词 ---------------- */
@@ -133,7 +135,8 @@ function renderWrong() {
       '<div class="m"></div></div>' +
       `<span class="pill">错 ${state.wrong[w.w]} 次</span>`;
     el.querySelector('.w').textContent = w.w;
-    el.querySelector('.ipa').textContent = '/' + (state.accent === 'uk' ? w.uk : w.us) + '/';
+    const ipa = state.accent === 'uk' ? w.uk : w.us;
+    el.querySelector('.ipa').textContent = ipa ? '/' + ipa + '/' : '';
     el.querySelector('.m').textContent = w.m;
     el.addEventListener('click', () => playWord(w));
     box.appendChild(el);

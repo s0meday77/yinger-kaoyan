@@ -152,7 +152,8 @@ function renderPageBar() {
   mk(0, '全部', allDone ? `${allDone}/${all.length}` : all.length + '词');
   pages.forEach((p) => {
     const done = pageMastered(p);
-    mk(p.index, String(p.index), done ? `${done}/${p.count}` : `${p.count}词`);
+    // ComfyUI 这类自建章节带 short 中文名，教学类词库仍显示页码
+    mk(p.index, p.short || String(p.index), done ? `${done}/${p.count}` : `${p.count}词`);
   });
   const active = bar.querySelector('.page-chip.active');
   if (active) active.scrollIntoView({ block: 'nearest', inline: 'center' });

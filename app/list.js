@@ -23,7 +23,9 @@ function cardNode(w) {
   const wEl = el.querySelector('.w');
   const mEl = el.querySelector('.m');
   wEl.textContent = masked ? '• • •' : w.w;
-  el.querySelector('.ipa').textContent = '/' + (state.accent === 'uk' ? w.uk : w.us) + '/';
+  const ipa = state.accent === 'uk' ? w.uk : w.us;
+  // 专业词（如 EasyNegative、DPM++ 2M）查不到音标，留空别显示成 //
+  el.querySelector('.ipa').textContent = ipa ? '/' + ipa + '/' : '';
   el.querySelector('.list-tag').textContent = (w.list || '').replace('Word List ', 'L');
   mEl.textContent = w.m;
   // 「释义」勾选框控制显示，取消勾选就整列藏起来

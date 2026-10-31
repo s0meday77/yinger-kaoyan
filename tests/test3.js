@@ -45,11 +45,13 @@ const check = (n, c, e = '') => out.push(`${c ? '✅' : '❌'} ${n}${e ? ' — '
   await sleep(400);
 
   const cats = $$('.cat-chip');
-  check('六个类别都在', cats.length === 6, [...cats].map((c) => c.textContent).join(' / '));
+  // 六个教材类别固定显示，ComfyUI词汇作为自建章节追加在最后
+  check('教材六类 + ComfyUI 章节都在', cats.length === 7, [...cats].map((c) => c.textContent).join(' / '));
   check('高频词是选中态', cats[0].classList.contains('active'), cats[0].textContent);
   // 中频词已上线，剩低频/偶考/基础/补充四类还没导入
   check('中频词已导入', !cats[1].classList.contains('empty'), cats[1].textContent);
-  check('其余四类标待导入', [...cats].slice(2).every((c) => c.classList.contains('empty')), '');
+  check('其余四类标待导入', [...cats].slice(2, 6).every((c) => c.classList.contains('empty')), '');
+  check('ComfyUI词汇不是待导入', !cats[6].classList.contains('empty'), cats[6].textContent);
 
   const pg = data.categories[0].pages;
   const pages = $$('.page-chip');
@@ -269,6 +271,21 @@ const check = (n, c, e = '') => out.push(`${c ? '✅' : '❌'} ${n}${e ? ' — '
   await sleep(40);
   check('错词页不显示箭头', !toTop.classList.contains('show'), toTop.className);
 
+  // ComfyUI 词汇章节渲染
+  cats[6].click();
+  await sleep(90);
+  const cvChips = [...$$('.page-chip')].map((b) => b.textContent.replace(/\s+/g, ''));
+  check('ComfyUI 页按钮显示中文名',
+    ['嵌入', '正面', '节点', '采样', '概念'].every((n) => cvChips.some((t) => t.includes(n))), cvChips.join(' '));
+  $$('.page-chip')[1].click();
+  await sleep(90);
+  const cvCards = $$('#wordList .card');
+  const cvFirst = cvCards[0];
+  // 前面的用例可能开着「遮住单词」，所以看释义而不是单词文本
+  check('负面嵌入页渲染出卡片', cvCards.length === 5 && cvFirst.textContent.includes('通用负面嵌入'),
+    cvFirst ? cvFirst.textContent.slice(0, 30) : '无');
+  check('无音标不显示空斜杠', !(cvFirst && /\/\s*\//.test(cvFirst.textContent)), '');
+
   // 数据完整性
   check('每天词数连续无空洞', (() => {
     for (const c of data.categories) {
@@ -287,8 +304,17 @@ const check = (n, c, e = '') => out.push(`${c ? '✅' : '❌'} ${n}${e ? ' — '
     return g.length === c.dayCount && g[0] === 1 && g[g.length - 1] === c.dayCount;
   }), data.categories.map((c) => `${c.name} ${c.dayCount} 天`).join(' / '));
 
-  const bad = data.words.filter((w) => !w.us || !w.uk || !w.us_audio || !w.uk_audio);
-  check('所有词都有英美音标和录音', bad.length === 0, bad.length ? bad.slice(0, 5).map((w) => w.w).join(',') : '');
+  // 教材词必须音标录音齐全；ComfyUI 词汇是专业词，查不到的音标留空、录音走系统 TTS
+  const TEACH = ['高频词', '中频词'];
+  const bad = data.words.filter((w) => TEACH.includes(w.cat)
+    && (!w.us || !w.uk || !w.us_audio || !w.uk_audio));
+  check('教材词都有英美音标和录音', bad.length === 0, bad.length ? bad.slice(0, 5).map((w) => w.w).join(',') : '');
+
+  const cv = data.words.filter((w) => w.cat === 'ComfyUI词汇');
+  check('ComfyUI词汇已并入', cv.length === 80, `${cv.length} 词`);
+  check('ComfyUI词汇释义齐全', cv.every((w) => w.m && w.m.length > 4), '');
+  check('ComfyUI词汇页标签是中文', (data.categories.find((c) => c.name === 'ComfyUI词汇') || { pages: [] })
+    .pages.every((p) => p.short && !/^[0-9]+$/.test(p.short)), '');
 
   console.log(out.join('\n'));
   const failed = out.filter((l) => l.startsWith('❌')).length;
