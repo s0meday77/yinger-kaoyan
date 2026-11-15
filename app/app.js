@@ -12,6 +12,7 @@ const state = {
   day: 0,               // 0 = 整页汇总
   theme: 'auto',
   accent: 'us',
+  voice: 'f',           // 音色 m=男声 f=女声 c=夹子音
   rate: 1,
   repeats: 2,           // 每词朗读遍数
   hideMeaning: true,    // 释义点开才看
@@ -51,7 +52,7 @@ function readStore() {
 function save() {
   try {
     localStorage.setItem(KEY, JSON.stringify({
-      accent: state.accent, rate: state.rate, repeats: state.repeats,
+      accent: state.accent, voice: state.voice, rate: state.rate, repeats: state.repeats,
       hideMeaning: state.hideMeaning, coverWord: state.coverWord, shuffle: state.shuffle,
       showIpa: state.showIpa, autoNext: state.autoNext,
       replayWrong: state.replayWrong, mustRetype: state.mustRetype,
@@ -64,6 +65,7 @@ function load() {
   try {
     const d = readStore();
     state.accent = d.accent || 'us';
+    state.voice = d.voice === 'm' || d.voice === 'c' ? d.voice : 'f';
     state.rate = d.rate || 1;
     state.repeats = d.repeats || 2;
     state.hideMeaning = d.hideMeaning === true;
@@ -294,11 +296,12 @@ function bind() {
     $('#optRateVal').textContent = state.rate.toFixed(2) + '×';
     save();
   });
-  $('#accentSel').addEventListener('change', (e) => {
-    state.accent = e.target.value;
-    $('#optAccent').value = state.accent;
-    save(); updateHeader(); renderList(); renderWrong();
-    toast(state.accent === 'us' ? '已切换美音' : '已切换英音');
+  const VOICE_NAME = { f: '女声', m: '男声', c: '夹子音' };
+  $('#voiceSel').addEventListener('change', (e) => {
+    state.voice = e.target.value;
+    $('#optVoice').value = state.voice;
+    save(); renderList();
+    toast('已切换' + (VOICE_NAME[state.voice] || '音色'));
   });
 
   $('#chainBtn').addEventListener('click', startChain);
@@ -322,10 +325,11 @@ function bind() {
   $('#settingsBtn').addEventListener('click', () => { renderThemes(); sheet.hidden = false; });
   $('#closeSheet').addEventListener('click', () => { sheet.hidden = true; });
   sheet.addEventListener('click', (e) => { if (e.target === sheet) sheet.hidden = true; });
-  $('#optAccent').addEventListener('change', (e) => {
-    state.accent = e.target.value;
-    $('#accentSel').value = state.accent;
-    save(); updateHeader(); renderList(); renderWrong();
+  $('#optVoice').addEventListener('change', (e) => {
+    state.voice = e.target.value;
+    $('#voiceSel').value = state.voice;
+    save(); renderList();
+    toast('已切换' + (VOICE_NAME[state.voice] || '音色'));
   });
   $('#optRate').addEventListener('input', (e) => {
     state.rate = Number(e.target.value);
@@ -395,12 +399,12 @@ async function boot() {
     return;
   }
   bind();
-  $('#optAccent').value = state.accent;
+  $('#optVoice').value = state.voice;
   $('#optRate').value = state.rate;
   $('#optRateVal').textContent = state.rate.toFixed(2) + '×';
   $('#optRepeats').value = state.repeats;
   // 工具条初始状态
-  $('#accentSel').value = state.accent;
+  $('#voiceSel').value = state.voice;
   $('#rate').value = state.rate;
   $('#rateVal').textContent = state.rate.toFixed(2);
   $('#btnShuffle').classList.toggle('on', state.shuffle);

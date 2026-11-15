@@ -8,10 +8,26 @@
 
 let audioEl = null;
 
-/** 全部发音文件的路径（美音 + 英音），打包时一次性灌进手机缓存 */
+/** 这个词该用哪份录音：新录的三套音色优先，没有就退回有道的旧录音 */
+function audioPath(w) {
+  const v = w.v;
+  if (v) {
+    if (v[state.voice]) return v[state.voice];
+    // 选中的那一套缺了，随便挑一套有的，总比没声强
+    const anyKey = Object.keys(v)[0];
+    if (anyKey) return v[anyKey];
+  }
+  return state.accent === 'uk' ? w.uk_audio : w.us_audio;
+}
+
+/** 全部发音文件的路径，打包时一次性灌进手机缓存 */
 function audioUrls() {
   const out = [];
   state.words.forEach((w) => {
+    if (w.v) {
+      Object.keys(w.v).forEach((k) => out.push('data/' + w.v[k]));
+      return;
+    }
     if (w.us_audio) out.push('data/' + w.us_audio);
     if (w.uk_audio) out.push('data/' + w.uk_audio);
   });
@@ -21,7 +37,7 @@ function audioUrls() {
 /** 播放单词；repeats 遍数由设置决定，最后一遍播完回调 done */
 async function playWord(w, done) {
   stopAudio();
-  const rel = state.accent === 'uk' ? w.uk_audio : w.us_audio;
+  const rel = audioPath(w);
   if (!rel) { speakTTS(w.w, done); return; }
   const file = 'data/' + rel;
   const total = Math.max(1, state.repeats | 0);

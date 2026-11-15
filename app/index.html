@@ -45,7 +45,11 @@
         <input type="range" id="rate" min="0.5" max="1.4" step="0.05" value="1">
         <span class="val" id="rateVal">1.00</span>
       </label>
-      <select id="accentSel"><option value="us">美音</option><option value="uk">英音</option></select>
+      <select id="voiceSel">
+        <option value="f">👩 女声</option>
+        <option value="m">👨 男声</option>
+        <option value="c">🌸 夹子音</option>
+      </select>
     </div>
     <div class="row">
       <input id="search" type="search" placeholder="搜索本课单词或释义" autocomplete="off">
@@ -111,8 +115,12 @@
     </div>
 
     <p class="group">发音</p>
-    <label class="opt"><span>口音</span>
-      <select id="optAccent"><option value="us">美音</option><option value="uk">英音</option></select>
+    <label class="opt"><span>音色 <em>每个词都录了三套，随时换着听</em></span>
+      <select id="optVoice">
+        <option value="f">👩 女声 · 自然亲和</option>
+        <option value="m">👨 男声 · 厚重有力</option>
+        <option value="c">🌸 夹子音 · 甜</option>
+      </select>
     </label>
     <label class="opt"><span>语速</span>
       <input type="range" id="optRate" min="0.6" max="1.2" step="0.05" value="1">

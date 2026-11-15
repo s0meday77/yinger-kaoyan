@@ -36,8 +36,9 @@ ENTRY_RE = re.compile(r"^([A-Za-z][A-Za-z'\- ]*?)\s*\[[^\]]{0,40}\]")
 # 否则 "a dvances in technology" 这种搭配行会被误判成词性 a. + 释义
 POS_TOKEN = r"(?:n|v|vt|vi|a|ad|adj|adv|prep|conj|pron|num|art|int|aux)"
 POS_RE = re.compile(r"^(" + POS_TOKEN + r"(?:\.(?:&|/)\s*" + POS_TOKEN + r")*\.)\s*")
-# 义项标记 [C,U] [C-常用sing.] [sing.,U] 等
-MARK_RE = re.compile(r"^\[([^\]]{1,20})\]\s*")
+# 义项标记 [C,U] [C-常用sing.] [sing.,U] 等；
+# 书上还会在前面挂个括注：`(ethics) [pl.] 道德准则`
+MARK_RE = re.compile(r"^(?:\([a-zA-Z\-]+\)\s*)?\[([^\]]{1,20})\]\s*")
 HAN_RE = re.compile(r"[一-鿿]")
 PAGE_RE = re.compile(r"^Page\s*\d*\s*$", re.I)
 LINK_RE = re.compile(r"\s*链\s*P\d+\s*")          # 「链P46」是跨页索引，手机上看没用
@@ -88,14 +89,23 @@ def join_split_entries(text):
 
     单独一个纯小写单词、下一行正好是音标，就合并成 `decrease [dɪˈkriːs] v.`，
     其后紧跟的其它读音行（第二词性的音标）丢掉。
+
+    还有一种：书上标了词根拆解，豆包把拆解写进了词条行，音标跑到下一行——
+
+        estimate  estim价值
+        ['estɪmət] n. / ['estɪmeɪt] v. →估价
+
+    这种词条行有两个以上空格 + 中文，下一行又正好以 `[` 开头，同样合并。
+    不加这条，estimate / surface / differ 这种词会整条漏掉。
     """
     lines = []
     raw = [l.strip() for l in text.splitlines()]
     i = 0
     while i < len(raw):
         l = raw[i]
-        if re.fullmatch(r"[a-z][a-z'\-]*", l) and i + 1 < len(raw) and raw[i + 1].startswith("["):
-            lines.append(l + " " + raw[i + 1])
+        head = re.fullmatch(r"([a-z][a-z'\-]*)(?:\s{2,}.*)?", l)
+        if head and i + 1 < len(raw) and raw[i + 1].startswith("["):
+            lines.append(head.group(1) + " " + raw[i + 1])
             i += 2
             while i < len(raw) and re.fullmatch(r"\[[^\]]{0,40}\]\s*[a-z.&/]*\s*", raw[i]):
                 i += 1
@@ -122,6 +132,7 @@ def parse(text):
     """
     entries, cur = {}, None
     after_meta = False       # 进了【扩】【近】【反】之后，搭配行要额外把关
+    pending_pos = ""         # 词性单独占一行时，等下一行义项来认领
     for line in join_split_entries(text):
         line = clean(line)
         if not line:
@@ -139,14 +150,34 @@ def parse(text):
                 continue
             cur = entries.setdefault(word, {"w": word, "blocks": []})
             after_meta = False
+            pending_pos = ""
             # 这一批文档把【记】挤在词条行末尾了
             note = re.search(r"【记】\s*(.*)$", line)
             if note:
                 cur["blocks"].append({"k": "记", "v": clean(note.group(1))})
+                continue
+            # 也有些词条把第一个义项写在音标后面：`electronic [...] a. 电子的`
+            # 尾巴里还带音标的（`n. / ['estɪmeɪt] v. →估价`）是第二读音的写法，跳过
+            tail = line[m.end():].strip()
+            pm2 = POS_RE.match(tail)
+            if pm2 and "[" not in tail and HAN_RE.search(tail[pm2.end():]):
+                body = tail[pm2.end():].strip()
+                mark = ""
+                mm2 = MARK_RE.match(body)
+                if mm2:
+                    mark = "[" + mm2.group(1) + "] "
+                    body = body[mm2.end():].strip()
+                cur["blocks"].append({"k": "义", "pos": pm2.group(1), "def": mark + body})
             continue
 
         if cur is None:
             continue                     # 词条之前的词根标题、页码碎行
+
+        # 书上的分组小标题：单独一行的「用」「扩」「近」「反」——
+        # 上面是义项、下面是例句/派生。不挡住的话「用」「扩」会被当成
+        # 释义的续句拼进去，变成「相异；有区别；不同于；用；扩」这种鬼东西
+        if line in ("用", "扩", "近", "反", "记", "族", "派"):
+            continue
 
         # 【近] 这种半角右括号的错字书上有，得一起认；【族】是派生词，同【扩】
         # 这一批还有不带括号的写法：`扩 [族] xxx`、`[近] xxx`
@@ -157,6 +188,7 @@ def parse(text):
             label = "扩" if kind in ("扩", "族") else kind
             cur["blocks"].append({"k": label, "v": body})
             after_meta = True
+            pending_pos = ""
             continue
 
         # 词性行 → 新义项
@@ -171,6 +203,12 @@ def parse(text):
             if mm:
                 mark = "[" + mm.group(1) + "] "
                 body = body[mm.end():].strip()
+            if not body and not mark:
+                # 词性单独占一行，释义在下一行（`n.` / `[U,C] 批评；批判`），
+                # 先记下来，下一行的义项接着用
+                pending_pos = pos
+                after_meta = False
+                continue
             cur["blocks"].append({"k": "义", "pos": pos, "def": mark + body})
             after_meta = False
             continue
@@ -178,7 +216,9 @@ def parse(text):
         # [C,U] 开头、没有词性的义项
         mm = MARK_RE.match(line)
         if mm:
-            cur["blocks"].append({"k": "义", "pos": "", "def": "[" + mm.group(1) + "] " + line[mm.end():].strip()})
+            pos = pending_pos
+            pending_pos = ""
+            cur["blocks"].append({"k": "义", "pos": pos, "def": "[" + mm.group(1) + "] " + line[mm.end():].strip()})
             after_meta = False
             continue
 
@@ -194,6 +234,7 @@ def parse(text):
             # 那些不能算到主词头上——除非这句里确实出现了主词本身
             if after_meta and not re.search(r"\b" + re.escape(cur["w"]), en.lower()):
                 continue
+            pending_pos = ""
             cur["blocks"].append({"k": "例", "p": en, "t": zh})
             continue
 

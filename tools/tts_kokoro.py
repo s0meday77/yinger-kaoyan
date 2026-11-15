@@ -24,6 +24,11 @@ import subprocess
 import sys
 import wave
 
+# 三个音色并行录时要限制每个进程的线程数：默认 onnxruntime 会开满 8 个，
+# 三个进程一起抢就把机器压死了（实测 load 冲到 130，比单进程还慢十几倍）
+os.environ.setdefault("OMP_NUM_THREADS", "3")
+os.environ.setdefault("ORT_NUM_THREADS", "3")
+
 MODEL_DIR = os.path.expanduser("~/tts-models")
 MODEL = os.path.join(MODEL_DIR, "kokoro-v1.0.onnx")
 VOICES = os.path.join(MODEL_DIR, "voices-v1.0.bin")

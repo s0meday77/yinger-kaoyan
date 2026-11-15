@@ -9,8 +9,10 @@ const data = JSON.parse(fs.readFileSync(path.join(APP, 'data/words.json'), 'utf8
 const dom = new JSDOM(html, { url: 'http://localhost:8766/', runScripts: 'outside-only', pretendToBeVisual: true });
 const { window } = dom;
 
+const fetched = [];
 window.fetch = async (url) => {
   const u = String(url);
+  fetched.push(u);
   if (u.includes('words.json')) return { json: async () => data };
   // 播放时改成 fetch 取整段音频再播（绕开 iOS 的分段请求问题），这里给个假 blob
   if (u.includes('/audio/')) return { ok: true, blob: async () => ({ size: 5000 }) };
@@ -27,13 +29,13 @@ window.Audio = class {
 const said = [];
 window.speechSynthesis = { speak(u) { said.push(u); }, cancel() {} };
 window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
-window.navigator.serviceWorker = { register: async () => {} };
+window.navigator.serviceWorker = { register: async () => {}, addEventListener() {}, ready: new Promise(() => {}) };
 window.HTMLElement.prototype.scrollIntoView = function () {};
 
 window.eval(
   ['ui.js', 'audio.js', 'offline.js', 'app.js', 'list.js', 'practice.js']
     .map((f) => fs.readFileSync(path.join(APP, f), 'utf8'))
-    .join('\n') + '\nwindow.__s = state;'
+    .join('\n') + '\nwindow.__s = state; window.__renderList = renderList;'
 );
 
 const $ = (s) => window.document.querySelector(s);
@@ -163,7 +165,7 @@ const check = (n, c, e = '') => out.push(`${c ? '✅' : '❌'} ${n}${e ? ' — '
   check('点词组不会顺带播单词', played.length === 0, `播放 ${played.length} 次`);
 
   // ---- 释义开关（管的是还没导入书上内容的词）----
-  $$('.page-chip')[2].click();          // Word List 2 暂时还是有道释义
+  $$('.page-chip')[3].click();          // Word List 3 暂时还是有道释义
   await sleep(60);
   const plain = () => $$('#wordList .card')[0].querySelector('.m');
   check('未导入的词显示有道释义', plain() && plain().hidden === false, '');
@@ -346,13 +348,55 @@ const check = (n, c, e = '') => out.push(`${c ? '✅' : '❌'} ${n}${e ? ' — '
   const cv = data.words.filter((w) => w.cat === 'ComfyUI词汇');
   check('ComfyUI词汇已并入', cv.length === 80, `${cv.length} 词`);
   check('ComfyUI词汇释义齐全', cv.every((w) => w.m && w.m.length > 4), '');
-  // 《词汇闪过》导入的数据：词组必须中英齐全，释义不能是空串
-  const starWords = data.words.filter((w) => w.sp || w.sm);
-  check('书中词组的英文和中文都不缺', starWords.every((w) =>
-    (!w.sp || w.sp.every((p) => p.p && p.t && p.p.length > 2)) &&
-    (!w.sm || w.sm.every((s) => typeof s === 'string' && s.length > 1))), `${starWords.length} 词`);
+  // 《词汇闪过》导入的数据：按书本顺序成块，每一块该有的字段都得有
+  const starWords = data.words.filter((w) => w.sb && w.sb.length);
+  check('书中内容成块且不缺字段', starWords.every((w) => w.sb.every((b) =>
+    b.k === '例' ? !!(b.p && b.t) : (b.k === '义' ? !!b.def : !!b.v))), `${starWords.length} 词`);
+  check('整页都已导入书上内容', data.categories[0].pages.slice(0, 2).every((p) =>
+    data.words.filter((w) => w.cat === '高频词' && w.list === p.name).every((w) => w.sb && w.sb.length)),
+    'Word List 1 / 2');
   check('ComfyUI词汇页标签是中文', (data.categories.find((c) => c.name === 'ComfyUI词汇') || { pages: [] })
     .pages.every((p) => p.short && !/^[0-9]+$/.test(p.short)), '');
+
+  // ---- 音色切换：每个词录了三套，选哪个就播哪个 ----
+  window.__s.coverWord = false;      // 前面的用例可能开着「听音猜词」，那样卡片上没单词
+  window.__s.search = '';
+  window.__s.filter = 'all';
+  const withVoice = data.words.filter((w) => w.v && w.v.m && w.v.f && w.v.c);
+  check('三套音色已写进词库', withVoice.length > 1500, `${withVoice.length} 词`);
+  const sample = withVoice[0];
+  const cardFor = (word) => [...$$('#wordList .card')].find((c) => c.querySelector('.w').textContent === word);
+  if (sample) {
+    window.__s.cat = sample.cat;
+    window.__s.page = sample.page;
+    window.__s.day = sample.day;
+    window.__renderList();
+    await sleep(50);
+    for (const [key, name] of [['f', '女声'], ['m', '男声'], ['c', '夹子音']]) {
+      window.__s.voice = key;
+      fetched.length = 0;
+      const c0 = cardFor(sample.w);
+      if (c0) c0.click();
+      await sleep(60);
+      const want = 'data/' + sample.v[key];
+      check(`选${name}时播对应的那套录音`, fetched.some((u) => u.includes(want)), want);
+    }
+    window.__s.voice = 'f';
+  }
+  // ComfyUI 的专业词没有三套录音，退回有道旧录音，不能哑掉
+  const cvw = data.words.find((w) => w.cat === 'ComfyUI词汇' && w.us_audio && !w.v);
+  if (cvw) {
+    window.__s.cat = cvw.cat;
+    window.__s.page = cvw.page;
+    window.__s.day = cvw.day;
+    window.__renderList();
+    await sleep(50);
+    fetched.length = 0;
+    const c = cardFor(cvw.w);
+    if (c) c.click();
+    await sleep(60);
+    check('没录新音色的词退回旧录音', fetched.some((u) => u.includes('data/' + cvw.us_audio)), cvw.w);
+  }
 
   console.log(out.join('\n'));
   const failed = out.filter((l) => l.startsWith('❌')).length;

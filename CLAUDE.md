@@ -40,7 +40,11 @@
 │   ├── audit.py              词库体检
 │   ├── crosscheck.py         第二词典独立核对
 │   ├── parse_star.py         《词汇闪过》OCR 文本 → 释义/词组 JSON
-│   ├── merge_star.py         把书上的释义/词组挂进 words.json（新字段 sm/sp）
+│   ├── merge_star.py         把书上的释义/词组挂进 words.json（新字段 sb）
+│   ├── tts_kokoro.py         Kokoro 本地 TTS 底座（试听样例 + 通用录词）
+│   ├── tts_voices.py         按音色批量录 m/f/c 三套 → words.json 的 v 字段
+│   ├── tts_cute.py           夹子音变调实验（asetrate+atempo 抬音调）
+│   ├── tts_check.py          新录音体检：三套齐不齐、时长像不像一个词
 │   └── serve.py              局域网静态服务器
 └── 启动.command              双击启动服务器
 ```
@@ -220,6 +224,31 @@ cd tests && node test3.js
   那些不能算到主词头上——规则是「不含主词本身的就丢」
 - **进度**：1~21 页 83 词 / 391 条搭配，**Word List 1 已全部完成**；继续按用户给的页段往下做
 - 每导入一批都要核对：书上词序 vs 词库词序（这批发现 account 位置错位，已按书序调整）
+
+## 音色（2026-11-16 大改：整批换掉有道录音）
+
+有道那批真人录音年代久、码率低，用户原话「**读音太老了，而且听不清楚，感觉咬字不清**」。
+换成 **Kokoro**（82M 神经网络 TTS，本机跑，不联网不调 API），每个词录三套：
+
+| key | 音色 | Kokoro |
+|---|---|---|
+| `m` | 男声 · 厚重有力 | `am_fenrir` |
+| `f` | 女声 · 自然亲和（**默认**） | `af_heart` |
+| `c` | 夹子音 · 甜 | `af_bella` |
+
+- 模型在 `~/tts-models/`（`kokoro-v1.0.onnx` 310M + `voices-v1.0.bin` 27M），
+  venv 在 `~/.tts-venv`（`pip install kokoro-onnx`），音素引擎 `brew install espeak-ng`
+- 录音：`~/.tts-venv/bin/python -I tools/tts_voices.py --key m`（f/c 同理），三个并行最省时；
+  `--apply` 把路径写进 words.json 的 `v` 字段。断点续跑，已有的跳过
+- 音频存 `app/data/audio/v/<key>/<word>.mp3`；**旧的 `audio/us|uk/` 一个字节都不动**，留作后备
+- 前端 `audioPath(w)` 优先 `w.v[state.voice]`，没有才退回老录音；
+  ComfyUI 的模型名（`ng_deepnegative_v1_75t`）永远走系统 TTS，不念垃圾
+- 「口音（美音/英音）」设置**已撤**，三套都是美音；`state.accent` 留着只管音标显示
+- `edge-tts` 走不通（微软 WSS 恒定 403，换版本号也没用），别再试了。
+  试听页 `app/trial.html`（第一轮 8 音色）、`app/trial2.html`（夹子音 5 底嗓 × 3 档音高）留着，
+  以后想换音色直接加候选、重出试听页
+- 夹子音的甜度靠 `asetrate+atempo` 抬音调（时长不变），见 `tools/tts_cute.py`；
+  最终**没加变调**——用户试听后选的 `af_bella` 原声
 
 ## 读音五重保障
 
