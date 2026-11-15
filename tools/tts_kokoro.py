@@ -73,10 +73,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--samples", action="store_true", help="生成各音色试听样例")
     ap.add_argument("--all", action="store_true", help="全量重录词库")
-    ap.add_argument("--voice", default="af_heart")
+    ap.add_argument("--voice", default="af_heart", help="美音音色")
+    ap.add_argument("--ukvoice", default="", help="英音音色（不填就沿用 --voice）")
     ap.add_argument("--speed", type=float, default=0.9, help="1.0 标准，0.9 慢一档")
     ap.add_argument("--out", default="/tmp/tts_sample")
     ap.add_argument("--only", default="", help="只重录这些词，逗号分隔（调试用）")
+    ap.add_argument("--apply", action="store_true",
+                    help="录完后把 words.json 里的音频路径指到新文件")
     args = ap.parse_args()
 
     if not os.path.exists(MODEL):
@@ -103,23 +106,53 @@ def main():
             keep = set(args.only.split(","))
             todo = [w for w in todo if w["w"] in keep]
         base = os.path.join(os.path.dirname(WORDS), "audio")
+        # 美音、英音各一套：口音开关还能用，不是摆设
+        # （不填 --ukvoice 就只做一套，英音也指过去）
+        tracks = [("neu", args.voice, "en-us")]
+        if args.ukvoice:
+            tracks.append(("neu_uk", args.ukvoice, "en-gb"))
+
         done = 0
         for w in todo:
-            rel = "neu/%s.mp3" % w["w"].replace(" ", "_")
-            dst = os.path.join(base, rel)
-            os.makedirs(os.path.dirname(dst), exist_ok=True)
-            if os.path.exists(dst) and os.path.getsize(dst) > 800:
-                done += 1
-                continue                        # 断点续跑：已经录好的不再重来
-            samples, sr = k.create(w["w"], voice=args.voice, speed=args.speed, lang="en-us")
-            wav = dst + ".wav"
-            write_wav(wav, samples, sr)
-            to_mp3(wav, dst)
-            os.remove(wav)
+            # 只管原来有真人录音的词；ComfyUI 那些模型名（ng_deepnegative_v1_75t）
+            # 念出来是垃圾，继续走系统 TTS
+            if not w.get("us_audio"):
+                continue
+            name = w["w"].lower().replace(" ", "_").replace("/", "_")
+            fresh = False
+            for folder, voice, lang in tracks:
+                dst = os.path.join(base, folder, name + ".mp3")
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                if os.path.exists(dst) and os.path.getsize(dst) > 800:
+                    continue                    # 断点续跑：已经录好的不再重来
+                samples, sr = k.create(w["w"], voice=voice, speed=args.speed, lang=lang)
+                wav = dst + ".wav"
+                write_wav(wav, samples, sr)
+                to_mp3(wav, dst)
+                os.remove(wav)
+                fresh = True
             done += 1
-            if done % 100 == 0:
+            if fresh and done % 100 == 0:
                 print("已录 %d / %d" % (done, len(todo)), flush=True)
         print("完成 %d 词" % done)
+
+        if args.apply:
+            uk_track = tracks[1][0] if len(tracks) > 1 else tracks[0][0]
+            changed = 0
+            for w in doc["words"]:
+                if not w.get("us_audio"):
+                    continue
+                name = w["w"].lower().replace(" ", "_").replace("/", "_")
+                if not os.path.exists(os.path.join(base, "neu", name + ".mp3")):
+                    continue
+                w["us_audio"] = "audio/neu/%s.mp3" % name
+                if os.path.exists(os.path.join(base, uk_track, name + ".mp3")):
+                    w["uk_audio"] = "audio/%s/%s.mp3" % (uk_track, name)
+                changed += 1
+            # 和 build_words.py 一致：紧凑单行，别把 diff 撑成一万行
+            with open(WORDS, "w", encoding="utf-8") as f:
+                json.dump(doc, f, ensure_ascii=False)
+            print("已更新 words.json：%d 词指向新录音" % changed)
 
 
 if __name__ == "__main__":
