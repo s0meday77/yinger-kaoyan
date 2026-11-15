@@ -30,6 +30,7 @@ function bookNode(w) {
   box.hidden = true;
 
   // 按书本顺序原样铺开：记忆法 → 义项 → 例句 → 派生 → 近义 → 反义
+  let phrIdx = 0;
   blocks.forEach((b) => {
     if (b.k === '义') {
       const p = document.createElement('p');
@@ -37,6 +38,7 @@ function bookNode(w) {
       p.textContent = (b.pos ? b.pos + ' ' : '') + b.def;
       box.appendChild(p);
     } else if (b.k === '例') {
+      const idx = phrIdx++;
       const row = document.createElement('div');
       row.className = 'phr';
       const en = document.createElement('span');
@@ -52,7 +54,7 @@ function bookNode(w) {
         stopAudio();
         box.querySelectorAll('.phr.on').forEach((r) => r.classList.remove('on'));
         row.classList.add('on');
-        speakTTS(b.p, () => row.classList.remove('on'));
+        playPhrase(w, idx, b.p, () => row.classList.remove('on'));
       });
       box.appendChild(row);
     } else {

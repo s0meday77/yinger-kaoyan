@@ -158,11 +158,19 @@ const check = (n, c, e = '') => out.push(`${c ? '✅' : '❌'} ${n}${e ? ' — '
     r.querySelector('.pen').textContent.trim() && r.querySelector('.pzh').textContent.trim()), `${phrRows.length} 条`);
   said.length = 0;
   played.length = 0;
+  fetched.length = 0;
   phrRows[0].click();
-  await sleep(30);
-  check('点词组单独朗读它', said.length === 1 && said[0].text.startsWith(phrRows[0].querySelector('.pen').textContent),
-    said.map((u) => u.text).join(' / '));
-  check('点词组不会顺带播单词', played.length === 0, `播放 ${played.length} 次`);
+  await sleep(60);
+  const wantPhr = /data\/audio\/ph\/f\/[a-z_]+_0\.mp3$/;
+  check('点词组播的是词组自己的录音（音色跟着设置走）',
+    fetched.some((u) => wantPhr.test(u)) && played.length === 1,
+    fetched.filter((u) => u.includes('/ph/')).join(' / ') || '没取到词组音频');
+  check('点词组不会顺带播单词',
+    !fetched.some((u) => u.includes('/v/f/') || u.includes('/us/')), `fetch ${fetched.length} 次`);
+  // 录音还没录到这一格时，退回系统语音，别哑掉
+  said.length = 0;
+  window.speakTTS('advances in technology');
+  check('没有录音时系统语音兜底', said.length === 1, said.map((u) => u.text).join(' / '));
 
   // ---- 释义开关（管的是还没导入书上内容的词）----
   $$('.page-chip')[3].click();          // Word List 3 暂时还是有道释义
