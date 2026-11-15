@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>新读音试听 · 考研英二</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#fff; --ink:#1b1f24; --muted:#7a828c;
+    --line:#e6e9ee; --accent:#2f6df6; --soft:#eef2fb; --on:#2f6df6;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#12151a;--card:#1b1f26;--ink:#e8ecf2;--muted:#8d95a1;--line:#272c35;--accent:#6f9bff;--soft:#1f2632;--on:#6f9bff}
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;padding:20px 16px 60px;background:var(--bg);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+  h1{font-size:19px;margin:0 0 6px}
+  .lead{margin:0 0 18px;color:var(--muted);font-size:13px}
+  .v{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+  .v.pick{border-color:var(--accent);box-shadow:0 0 0 2px var(--soft)}
+  .vhead{display:flex;align-items:baseline;gap:8px;margin-bottom:3px}
+  .vname{font-weight:700;font-size:16px}
+  .vtag{font-size:11.5px;color:var(--accent);background:var(--soft);border-radius:6px;padding:1px 6px}
+  .vid{font-size:11px;color:var(--muted);font-family:ui-monospace,monospace}
+  .row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--bg);
+    color:var(--ink);border-radius:10px;padding:8px 13px;transition:.15s}
+  button:active{transform:scale(.97)}
+  button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  button.all{background:var(--soft);border-color:transparent;color:var(--accent);font-weight:600}
+  .phr{flex-basis:100%;text-align:left;font-size:13.5px;color:var(--muted)}
+  .phr.on{color:#fff}
+  .foot{margin-top:22px;color:var(--muted);font-size:12.5px;line-height:1.7}
+</style>
+</head>
+<body>
+<h1>新读音试听</h1>
+<p class="lead">词 / 词组点一下就读。语速统一放慢 10%。选好后我批量换掉全部 3212 条。</p>
+<div id="list"></div>
+<p class="foot">词：advance · recognize · opportunity<br>词组：advances in technology</p>
+<script>
+const VOICES = [
+  ['am_onyx',    '稳重浑厚男声', '男声'],
+  ['am_fenrir',  '厚重有力男声', '男声'],
+  ['bm_george',  '英式稳重男声', '男声'],
+  ['af_sarah',   '御姐高级教师', '女声'],
+  ['af_heart',   '自然亲和女声', '女声'],
+  ['bf_emma',    '英式优雅女声', '女声'],
+  ['af_sky',     '夹子音 · 年轻轻快', '夹子音'],
+  ['af_nicole',  '夹子音 · 轻声细语', '夹子音'],
+];
+const WORDS = ['advance', 'recognize', 'opportunity'];
+const PHRASE = 'advances in technology';
+const audio = new Audio();
+let playingBtn = null;
+
+function playOne(btn, src, chain) {
+  if (playingBtn) playingBtn.classList.remove('on');
+  audio.pause();
+  audio.src = src;
+  playingBtn = btn;
+  btn.classList.add('on');
+  audio.onended = () => {
+    btn.classList.remove('on');
+    if (chain && chain.length) playOne(btn, chain.shift(), chain);
+  };
+  audio.onerror = () => btn.classList.remove('on');
+  audio.play().catch(() => btn.classList.remove('on'));
+}
+
+const list = document.getElementById('list');
+VOICES.forEach(([id, name, kind]) => {
+  const box = document.createElement('div');
+  box.className = 'v';
+  box.innerHTML =
+    '<div class="vhead"><span class="vname">' + name + '</span>' +
+    '<span class="vtag">' + kind + '</span><span class="vid">' + id + '</span></div>' +
+    '<div class="row"></div>';
+  const row = box.querySelector('.row');
+  const seq = [];
+  WORDS.forEach((w, i) => {
+    const src = 'data/audio/trial/' + id + '_' + i + '.mp3';
+    seq.push(src);
+    const b = document.createElement('button');
+    b.textContent = w;
+    b.addEventListener('click', () => playOne(b, src));
+    row.appendChild(b);
+  });
+  const psrc = 'data/audio/trial/' + id + '_3.mp3';
+  const pb = document.createElement('button');
+  pb.className = 'phr';
+  pb.textContent = '▸ ' + PHRASE;
+  pb.addEventListener('click', () => playOne(pb, psrc));
+  row.appendChild(pb);
+
+  const all = document.createElement('button');
+  all.className = 'all';
+  all.textContent = '▶ 连播三个词';
+  all.addEventListener('click', () => playOne(all, seq[0], seq.slice(1)));
+  box.appendChild(all);
+  list.appendChild(box);
+});
+</script>
+</body>
+</html>
