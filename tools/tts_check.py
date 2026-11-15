@@ -50,7 +50,12 @@ def check(path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--fix", action="store_true", help="删掉不合格的文件")
+    ap.add_argument("--phrase", action="store_true", help="体检词组录音（时长上限放宽）")
     args = ap.parse_args()
+
+    global MAX_SEC
+    if args.phrase:
+        MAX_SEC = 9.0                    # 「a collection of geniuses」这种能念到六七秒
 
     with open(WORDS, encoding="utf-8") as f:
         words = [w for w in json.load(f)["words"] if w.get("us_audio")]
@@ -58,8 +63,18 @@ def main():
     jobs = []
     for w in words:
         name = w["w"].lower().replace(" ", "_").replace("/", "_")
-        for k in KEYS:
-            jobs.append((w["w"], k, os.path.join(AUDIO, "v", k, name + ".mp3")))
+        if args.phrase:
+            idx = 0
+            for b in (w.get("sb") or []):
+                if b.get("k") != "例":
+                    continue
+                if (b.get("p") or "").strip():
+                    for k in KEYS:
+                        jobs.append((w["w"], k, os.path.join(AUDIO, "ph", k, "%s_%d.mp3" % (name, idx))))
+                idx += 1
+        else:
+            for k in KEYS:
+                jobs.append((w["w"], k, os.path.join(AUDIO, "v", k, name + ".mp3")))
 
     def run(j):
         word, k, p = j

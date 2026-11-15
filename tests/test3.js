@@ -173,7 +173,7 @@ const check = (n, c, e = '') => out.push(`${c ? '✅' : '❌'} ${n}${e ? ' — '
   check('没有录音时系统语音兜底', said.length === 1, said.map((u) => u.text).join(' / '));
 
   // ---- 释义开关（管的是还没导入书上内容的词）----
-  $$('.page-chip')[3].click();          // Word List 3 暂时还是有道释义
+  $$('.page-chip')[4].click();          // Word List 4 还没导入书上内容，只显示有道释义
   await sleep(60);
   const plain = () => $$('#wordList .card')[0].querySelector('.m');
   check('未导入的词显示有道释义', plain() && plain().hidden === false, '');
@@ -360,9 +360,9 @@ const check = (n, c, e = '') => out.push(`${c ? '✅' : '❌'} ${n}${e ? ' — '
   const starWords = data.words.filter((w) => w.sb && w.sb.length);
   check('书中内容成块且不缺字段', starWords.every((w) => w.sb.every((b) =>
     b.k === '例' ? !!(b.p && b.t) : (b.k === '义' ? !!b.def : !!b.v))), `${starWords.length} 词`);
-  check('整页都已导入书上内容', data.categories[0].pages.slice(0, 2).every((p) =>
+  check('整页都已导入书上内容', data.categories[0].pages.slice(0, 3).every((p) =>
     data.words.filter((w) => w.cat === '高频词' && w.list === p.name).every((w) => w.sb && w.sb.length)),
-    'Word List 1 / 2');
+    'Word List 1 / 2 / 3');
   check('ComfyUI词汇页标签是中文', (data.categories.find((c) => c.name === 'ComfyUI词汇') || { pages: [] })
     .pages.every((p) => p.short && !/^[0-9]+$/.test(p.short)), '');
 

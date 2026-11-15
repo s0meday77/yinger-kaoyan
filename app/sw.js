@@ -1,5 +1,5 @@
 /* 离线缓存：外壳常驻，音频按需缓存 + 一键全量打包 */
-const VER = 'v28';
+const VER = 'v29';
 // 音频单独放一个固定名字的缓存，不跟版本号走：
 // 这样以后每次发新版，用户辛苦打包的 1942 个录音不会被清掉重来
 const AUDIO = 'audio-v1';
@@ -151,7 +151,20 @@ async function cacheAll(urls, port) {
     }
   }
   await Promise.all(Array.from({ length: Math.min(CONC, total || 1) }, worker));
+  // 下完顺手清掉这版用不上的旧录音（有道那 46MB），不然新旧叠着占地方
+  if (fail === 0) await pruneAudio(urls);
   port && port.postMessage({ type: 'offline-done', done, total, fail });
+}
+
+/** 删掉缓存里已经不被这版引用的音频；打包成功才调用，别把没下完的清掉 */
+async function pruneAudio(urls) {
+  if (!urls || urls.length < 100) return;     // urls 不对就别动，宁可多占也不误删
+  const cache = await caches.open(AUDIO);
+  const keep = new Set(urls.map((u) => new URL(u, self.location.href).href));
+  const keys = await cache.keys();
+  for (const req of keys) {
+    if (!keep.has(req.url)) await cache.delete(req);
+  }
 }
 
 async function reportStatus(urls, port) {

@@ -43,7 +43,12 @@ HAN_RE = re.compile(r"[一-鿿]")
 PAGE_RE = re.compile(r"^Page\s*\d*\s*$", re.I)
 LINK_RE = re.compile(r"\s*链\s*P\d+\s*")          # 「链P46」是跨页索引，手机上看没用
 MARK_TAG_RE = re.compile(r"\[(族|近|反|派)\]")
+PREP_RE = re.compile(r"^(?:in|on|at|for|of|to|with|by|from|as|about|into|over|under)\b", re.I)
+DROPPED = []                                     # 被判定为 OCR 截断、丢掉的搭配
 CJK_PUNCT = "（【「《"
+PAGE_MARK_RE = re.compile(r"^(?:#\s*P\d+|={2,}.+?={2,})$")
+# 内部哨兵：tab 版式里「义项」那一格，明确是新义项，不走「英文+中文=例句」的判断
+SENSE_MARK = "\x01"
 
 
 def docx_to_text(path):
@@ -75,9 +80,67 @@ def split_pair(line):
     en = line[:i].strip(" ,，、;；(（[【")
     # 英文后面那半截括号会落到中文里（「National Health Council(加拿大)…」），去掉
     zh = re.sub(r"(?<=[一-鿿])\)", "", line[i:].strip())
+    # 「the identity between A and B A和B的相同之处」——原文 A 和汉字之间没空格，
+    # 切在汉字前的那个大写字母其实是中文句子的一部分，还回去
+    tail = re.search(r"([A-Z])$", en)
+    if tail and i > 0 and line[i - 1] != " ":
+        en = en[:-1].strip()
+        zh = tail.group(1) + zh
+    # 「the commercial use of… ……的商业用途」——后半截省略号被算进了英文侧，
+    # 中文就只剩「的商业用途」。末尾留一个省略号给英文，其余还给中文
+    dots = re.search(r"(…+)\s*$", en)
+    if dots and dots.group(1) != "…":
+        head = en[:dots.start()].strip()
+        if head.endswith("…"):
+            en = head                                  # 英文自己已经带省略号了
+            zh = dots.group(1) + zh
+        else:
+            en = head + "…"
+            zh = dots.group(1)[1:] + zh
+    zh = re.sub(r"^…{3,}", "……", zh)          # 中文里的省略号统一成「……」
     if not re.search(r"[A-Za-z]{2}", en) or not zh:
         return None, None
     return en, zh
+
+
+def normalize_tabs(text):
+    """豆包对同一本书的前后两半用了两种版式，后半截是「一行多列、tab 分隔」：
+
+        ■ neglect [nɪˈɡlekt] v./n. 【记】neg-（不）+lect（选择）→…
+        用
+        vt.	忽略；忽视；不予重视	neglect the happiness 忽略快乐
+        	疏漏；疏忽	neglect to do sth. 遗漏做某事
+        		neglect social science 不重视社会科学
+        扩 [族] neglectful a. 忽视的	[近] ignore vt. 忽视
+
+    先摊回「一个元素一行」，后面的解析逻辑就通用了。
+    中间那一格是书上印的义项，用哨兵标一下——不然像「（the military）[sing.]
+    军人；军队」这种会被当成「英文搭配 + 中文」变成例句。
+    """
+    out = []
+    for raw in text.splitlines():
+        line = raw.rstrip()
+        if PAGE_MARK_RE.match(line.strip()):
+            continue
+        if line.lstrip().startswith("■"):
+            line = line.lstrip()[1:].strip()
+        if "\t" not in line:
+            out.append(line)
+            continue
+        cells = [c.strip() for c in line.split("\t")]
+        if len(cells) >= 3:
+            # 第一格是词性、最后一格是例句、中间的都是义项
+            if cells[0]:
+                out.append(cells[0])
+            for c in cells[1:-1]:
+                if c:
+                    out.append(SENSE_MARK + c)
+            if cells[-1]:
+                out.append(cells[-1])
+        else:
+            # 两列：派生/近反义并排，各自独立成行
+            out.extend(c for c in cells if c)
+    return out
 
 
 def join_split_entries(text):
@@ -99,7 +162,8 @@ def join_split_entries(text):
     不加这条，estimate / surface / differ 这种词会整条漏掉。
     """
     lines = []
-    raw = [l.strip() for l in text.splitlines()]
+    src = text if isinstance(text, list) else text.splitlines()
+    raw = [l.strip() for l in src]
     i = 0
     while i < len(raw):
         l = raw[i]
@@ -110,9 +174,44 @@ def join_split_entries(text):
             while i < len(raw) and re.fullmatch(r"\[[^\]]{0,40}\]\s*[a-z.&/]*\s*", raw[i]):
                 i += 1
             continue
+        # 跨页时豆包把记忆法排到了下一页词条的前面（general 的
+        # 「gener（出生）+-al（形容词后缀）→…→普遍的」就掉了 P45 后面），
+        # 把它挪到词条行之后，否则整条的【记】就没了。
+        # 纯词根小标题（`milit 兵`）没有 `+` 和 `→`，不算，照旧忽略
+        if ("+" in l and "→" in l and HAN_RE.search(l)
+                and i + 1 < len(raw) and ENTRY_RE.match(raw[i + 1])
+                and "【记】" not in raw[i + 1]):
+            lines.append(raw[i + 1])
+            lines.append("【记】" + l)
+            i += 2
+            continue
         lines.append(l)
         i += 1
     return lines
+
+
+def is_form_of(tok, word):
+    """tok 是不是 word 的变形或派生（classifiable ← classify、advances ← advance）。
+
+    只认「以词根开头」，不能用公共前缀长度：classical 和 classify 前六个字母
+    都是 classi，但它们是两个不同的词，共前缀会把 classical 的例句挂到 classify 上。
+    """
+    if len(word) < 6:
+        return False
+    return tok.startswith(word) or tok.startswith(word[:-1])
+
+
+def other_word(en, exclude, known):
+    """这句搭配是不是别的词条的（跨页时书会把下一词的例句排到上一词的【扩】后面）。"""
+    toks = re.findall(r"[a-z][a-z'\-]{2,}", en.lower())
+    for t in toks:
+        if t in known and t != exclude:
+            return t
+    for t in toks:
+        for k in known:
+            if k != exclude and is_form_of(t, k):
+                return k
+    return None
 
 
 def parse(text):
@@ -121,6 +220,7 @@ def parse(text):
     每个词条是一条 blocks 列表，顺序和书上完全一致：
 
         {"k": "记", "v": "本身为词根，意为“前”→…"}
+        {"k": "注", "v": "亦作 center"}
         {"k": "义", "pos": "n.", "def": "[C,U] 进步；进展"}
         {"k": "例", "p": "scientific advances", "t": "科学进步"}
         {"k": "扩", "v": "[族] advancement n. 进步"}
@@ -131,9 +231,34 @@ def parse(text):
     书上是一义项带几条例句交替排的，只能按顺序存。
     """
     entries, cur = {}, None
+    DROPPED.clear()
+    lines = join_split_entries(normalize_tabs(text))
+    known = set()
+    for l in lines:
+        me = ENTRY_RE.match(l)
+        if me:
+            ww = me.group(1).strip().lower()
+            if re.fullmatch(r"[a-z][a-z'\-]*", ww):
+                known.add(ww)
     after_meta = False       # 进了【扩】【近】【反】之后，搭配行要额外把关
     pending_pos = ""         # 词性单独占一行时，等下一行义项来认领
-    for line in join_split_entries(text):
+    last_pos = ""            # 最近一次出现的词性，tab 版式的续行义项要继承它
+    for li, line in enumerate(lines):
+        # tab 版式明确标出来的义项：这一格内容就是释义，去做例句判断
+        if line.startswith(SENSE_MARK):
+            body = clean(line[1:])
+            if not body or cur is None:
+                continue
+            pos = pending_pos or last_pos
+            mark = ""
+            mm0 = MARK_RE.match(body)
+            if mm0:
+                mark = "[" + mm0.group(1) + "] "
+                body = body[mm0.end():].strip()
+            cur["blocks"].append({"k": "义", "pos": pos, "def": mark + body})
+            pending_pos = ""
+            after_meta = False
+            continue
         line = clean(line)
         if not line:
             continue
@@ -151,14 +276,18 @@ def parse(text):
             cur = entries.setdefault(word, {"w": word, "blocks": []})
             after_meta = False
             pending_pos = ""
+            last_pos = ""
+            # `centre [...]（亦作center）n.` —— 英美拼写变体，考研英二爱考，别丢
+            tail = line[m.end():].strip()
+            alias = re.search(r"（亦作\s*([A-Za-z\- ]+)）", tail)
+            if alias:
+                cur["blocks"].append({"k": "注", "v": "亦作 " + alias.group(1).strip()})
+                tail = (tail[:alias.start()] + tail[alias.end():]).strip()
             # 这一批文档把【记】挤在词条行末尾了
             note = re.search(r"【记】\s*(.*)$", line)
             if note:
                 cur["blocks"].append({"k": "记", "v": clean(note.group(1))})
                 continue
-            # 也有些词条把第一个义项写在音标后面：`electronic [...] a. 电子的`
-            # 尾巴里还带音标的（`n. / ['estɪmeɪt] v. →估价`）是第二读音的写法，跳过
-            tail = line[m.end():].strip()
             pm2 = POS_RE.match(tail)
             if pm2 and "[" not in tail and HAN_RE.search(tail[pm2.end():]):
                 body = tail[pm2.end():].strip()
@@ -173,6 +302,16 @@ def parse(text):
         if cur is None:
             continue                     # 词条之前的词根标题、页码碎行
 
+        # defence 的「（亦作defense）n.」被豆包拆成了独立一行
+        alt = re.match(r"^（亦作\s*([A-Za-z\- ]+)）\s*(.*)$", line)
+        if alt:
+            cur["blocks"].append({"k": "注", "v": "亦作 " + alt.group(1).strip()})
+            pm3 = POS_RE.match(alt.group(2).strip())
+            if pm3:
+                pending_pos = pm3.group(1)
+                last_pos = pm3.group(1)
+            continue
+
         # 书上的分组小标题：单独一行的「用」「扩」「近」「反」——
         # 上面是义项、下面是例句/派生。不挡住的话「用」「扩」会被当成
         # 释义的续句拼进去，变成「相异；有区别；不同于；用；扩」这种鬼东西
@@ -185,6 +324,11 @@ def parse(text):
         if tag:
             kind = tag.group(1) or tag.group(2) or tag.group(3)
             body = clean(tag.group(4))
+            # 书上还有「扩 [近] duty n. 责任」这种套一层的写法，以内层的标记为准
+            inner = MARK_TAG_RE.match(body)
+            if inner:
+                kind = inner.group(1)
+                body = body[inner.end():].strip()
             label = "扩" if kind in ("扩", "族") else kind
             cur["blocks"].append({"k": label, "v": body})
             after_meta = True
@@ -207,9 +351,11 @@ def parse(text):
                 # 词性单独占一行，释义在下一行（`n.` / `[U,C] 批评；批判`），
                 # 先记下来，下一行的义项接着用
                 pending_pos = pos
+                last_pos = pos
                 after_meta = False
                 continue
             cur["blocks"].append({"k": "义", "pos": pos, "def": mark + body})
+            last_pos = pos
             after_meta = False
             continue
 
@@ -228,11 +374,37 @@ def parse(text):
             # 特征是英文部分只有一两个小写短词、可能用逗号并列，不像短语
             if re.fullmatch(r"[a-z]{1,7}(?:,\s*[a-z]{1,7})*", en):
                 continue
+            # 「intellig 学会 intellect 学习」——词根小标题排在词条行正上方，
+            # 后面跟的是带音标的词条。单个小写词 + 下一行就是词条，认作标题跳过
+            if re.fullmatch(r"[a-z]{1,12}", en):
+                nxt = next((clean(x) for x in lines[li + 1:] if clean(x)), "")
+                if ENTRY_RE.match(nxt):
+                    continue
             if en.lower().strip() == cur["w"]:
                 continue                      # 「apt 适应」这种就是单词本身，不算搭配
             # 【扩】后面常跟着派生词自己的例句（classify 下面挂着 classic 的例子），
-            # 那些不能算到主词头上——除非这句里确实出现了主词本身
+            # 那些不能算到主词头上——除非这句里确实出现了主词本身。
+            # 但跨页时书会把**下一个词**的例句也排在这里（conclude 段尾的
+            # 「in conclusion 最后」、classify 段尾的 classical 例句），
+            # 那就认出来是谁的，直接挂过去，别丢
             if after_meta and not re.search(r"\b" + re.escape(cur["w"]), en.lower()):
+                toks = re.findall(r"[a-z][a-z'\-]{2,}", en.lower())
+                # 主词自己的派生词（书上漏印 [族]）：classifiable ← classify
+                if any(is_form_of(t, cur["w"]) for t in toks):
+                    cur["blocks"].append({"k": "扩", "v": en + " " + zh})
+                    continue
+                tgt = other_word(en, cur["w"], known)
+                if tgt and tgt in entries:
+                    entries[tgt]["blocks"].append({"k": "例", "p": en, "t": zh})
+                elif not tgt:
+                    DROPPED.append((cur["w"], en))
+                continue
+            # 豆包偶尔把搭配截断了，只剩个介词短语（immigrant 下面那条
+            # 「in the U.S. 在美国的亚洲移民」就是少了前半句），主词都不在，
+            # 留着只会让他学到半句话——丢掉，并在结尾列出来让人复核
+            stem = cur["w"][:max(3, len(cur["w"]) - 3)]
+            if len(en) < 16 and PREP_RE.match(en) and stem not in en.lower():
+                DROPPED.append((cur["w"], en))
                 continue
             pending_pos = ""
             cur["blocks"].append({"k": "例", "p": en, "t": zh})
@@ -305,6 +477,10 @@ def main():
         cnt["近"] = cnt.get("近", 0) + sum(1 for b in e["blocks"] if b["k"] == "近")
         cnt["反"] = cnt.get("反", 0) + sum(1 for b in e["blocks"] if b["k"] == "反")
     print("记忆法 %d ｜ 派生 %d ｜ 近义 %d ｜ 反义 %d" % (cnt["记"], cnt["扩"], cnt["近"], cnt["反"]))
+    if DROPPED:
+        print("丢弃的残缺搭配 %d 条（OCR 截断，主词不在里面）:" % len(DROPPED))
+        for w, en in DROPPED:
+            print("   %-18s %s" % (w, en))
 
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(entries, f, ensure_ascii=False, indent=1)
