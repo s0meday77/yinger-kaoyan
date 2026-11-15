@@ -136,8 +136,11 @@ main{padding:12px 16px calc(84px + var(--safe-b))}
 .card .phrs{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);
   display:flex;flex-direction:column;gap:5px}
 .card .extra > .phrs:first-child{margin-top:0;padding-top:0;border-top:0}
-.card .phr{display:flex;flex-wrap:wrap;gap:6px;font-size:12.5px;line-height:1.45;cursor:pointer}
+.card .phr{display:flex;flex-wrap:wrap;gap:6px;font-size:12.5px;line-height:1.45;cursor:pointer;
+  margin:0 -5px;padding:3px 5px;border-radius:7px;transition:background .15s}
 .card .phr:active .pen{color:var(--accent)}
+.card .phr.on{background:var(--card)}
+.card .phr.on .pen{color:var(--accent)}
 .card .phr .pen{color:var(--ink);font-weight:500;opacity:.92}
 .card .phr .pzh{color:var(--muted)}
 .empty{color:var(--muted);text-align:center;font-size:14px;padding:36px 0}

@@ -49,14 +49,13 @@ function bookNode(w) {
       zh.className = 'pzh';
       zh.textContent = item.t;
       row.append(en, zh);
-      // 点词组单独朗读它，只读一遍，不跟着「每词朗读」跑三遍
+      // 点哪条读哪条：只读这条短语本身，遍数跟着「每词朗读」设置走
       row.addEventListener('click', (e) => {
         e.stopPropagation();
         stopAudio();
-        const keep = state.repeats;
-        state.repeats = 1;
-        speakTTS(item.p);
-        state.repeats = keep;
+        list.querySelectorAll('.phr.on').forEach((r) => r.classList.remove('on'));
+        row.classList.add('on');
+        speakTTS(item.p, () => row.classList.remove('on'));
       });
       list.appendChild(row);
     });
