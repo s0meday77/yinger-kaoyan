@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
-"""把《词汇闪过》解析结果挂进词库：每个词多两个字段。
+"""把《词汇闪过》解析结果挂进词库：每个词多一个 `sb` 字段。
 
-    sm = 书上释义，按词性分行，如 ["n. [C,U] 进步；进展", "vt. 促进；推动"]
-    sp = 书上搭配，如 [{"p": "scientific advances", "t": "科学进步"}]
+`sb` 是按**书本顺序**排好的块列表，书上有什么就有什么：
 
-有道来的 m（释义）原样保留：书上还没导入的词继续用有道的显示。
-书上的内容进新字段而不是覆盖 m，是因为后面还要一组一组往下导入，
-得能一眼看出哪些词已经换成了书上的内容。
+    {"k": "记", "v": "本身为词根，意为“前”→…"}     记忆法
+    {"k": "义", "pos": "n.", "def": "[C,U] 进步；进展"}
+    {"k": "例", "p": "scientific advances", "t": "科学进步"}
+    {"k": "扩", "v": "[族] advancement n. 进步"}      派生
+    {"k": "近", "v": "progressive a. 先进的"}
+    {"k": "反", "v": "primitive a. 落后的"}
+
+分开存（释义一坨、词组一坨）不行：书上是一个义项下面跟几条例句再接下个义项，
+必须按顺序存才能还原成一模一样。
+
+有道来的 m（释义）原样保留：书上还没导入的词继续用有道显示。
 
 用法:
     python3 -I tools/merge_star.py ~/Desktop/词汇闪过1-15页.docx
@@ -20,7 +27,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-from parse_star import docx_to_text, merge_senses, parse  # noqa: E402
+from parse_star import docx_to_text, parse, phrases_of, senses_of  # noqa: E402
 
 WORDS = os.path.join(HERE, "..", "app", "data", "words.json")
 
@@ -51,14 +58,12 @@ def main():
         if not w:
             miss.append(word)
             continue
-        senses = merge_senses(e["senses"])
-        if senses:
-            w["sm"] = senses
-        if e["phrases"]:
-            w["sp"] = e["phrases"]
-        hit.append((word, len(e["phrases"]), len(senses)))
+        w["sb"] = e["blocks"]
+        w.pop("sm", None)          # 早期版本的两个字段，统一到 sb
+        w.pop("sp", None)
+        hit.append((word, len(phrases_of(e["blocks"])), len(senses_of(e["blocks"]))))
 
-    covered = sum(1 for w in doc["words"] if w.get("sp") or w.get("sm"))
+    covered = sum(1 for w in doc["words"] if w.get("sb"))
     print("本次导入 %d 词 ｜ 匹配 %d ｜ 未匹配 %d %s" %
           (len(entries), len(hit), len(miss), miss if miss else ""))
     print("词库累计覆盖 %d / %d（%.1f%%）" %

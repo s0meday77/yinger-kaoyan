@@ -14,55 +14,59 @@ function filtered() {
 function bookNode(w) {
   const wrap = document.createElement('div');
   wrap.className = 'book';
+  const blocks = w.sb || [];
 
   const btn = document.createElement('button');
   btn.className = 'fold';
   btn.type = 'button';
-  const phrs = w.sp || [];
-  const defs = w.sm || [];
+  const nPhr = blocks.filter((b) => b.k === '例').length;
   const parts = [];
-  if (defs.length) parts.push('释义');
-  if (phrs.length) parts.push('词组 ' + phrs.length);
+  if (blocks.some((b) => b.k === '义')) parts.push('释义');
+  if (nPhr) parts.push('词组 ' + nPhr);
   btn.innerHTML = '<i class="arw">▸</i><span>' + parts.join(' · ') + '</span>';
 
   const box = document.createElement('div');
   box.className = 'extra';
   box.hidden = true;
 
-  defs.forEach((d) => {
-    const p = document.createElement('p');
-    p.className = 'def';
-    p.textContent = d;
-    box.appendChild(p);
-  });
-
-  if (phrs.length) {
-    const list = document.createElement('div');
-    list.className = 'phrs';
-    phrs.forEach((item) => {
+  // 按书本顺序原样铺开：记忆法 → 义项 → 例句 → 派生 → 近义 → 反义
+  blocks.forEach((b) => {
+    if (b.k === '义') {
+      const p = document.createElement('p');
+      p.className = 'def';
+      p.textContent = (b.pos ? b.pos + ' ' : '') + b.def;
+      box.appendChild(p);
+    } else if (b.k === '例') {
       const row = document.createElement('div');
       row.className = 'phr';
       const en = document.createElement('span');
       en.className = 'pen';
-      en.textContent = item.p;
+      en.textContent = b.p;
       const zh = document.createElement('span');
       zh.className = 'pzh';
-      zh.textContent = item.t;
+      zh.textContent = b.t;
       row.append(en, zh);
       // 点哪条读哪条：只读这条短语本身，遍数跟着「每词朗读」设置走
       row.addEventListener('click', (e) => {
         e.stopPropagation();
         stopAudio();
-        list.querySelectorAll('.phr.on').forEach((r) => r.classList.remove('on'));
+        box.querySelectorAll('.phr.on').forEach((r) => r.classList.remove('on'));
         row.classList.add('on');
-        speakTTS(item.p, () => row.classList.remove('on'));
+        speakTTS(b.p, () => row.classList.remove('on'));
       });
-      list.appendChild(row);
-    });
-    box.appendChild(list);
-  }
+      box.appendChild(row);
+    } else {
+      // 【记】【扩】【近】【反】——书上怎么写就怎么显示
+      const p = document.createElement('p');
+      p.className = 'note note-' + b.k;
+      const tag = document.createElement('b');
+      tag.textContent = '【' + b.k + '】';
+      p.append(tag, document.createTextNode(b.v));
+      box.appendChild(p);
+    }
+  });
 
-  // 设了「释义点开才看」就默认收起，否则一进来就摊开
+  // 每张卡片各管各的：学到哪个词就点哪张，不跟着全局设置一起摊开
   const open = () => {
     box.hidden = !box.hidden;
     btn.classList.toggle('open', !box.hidden);
@@ -70,14 +74,13 @@ function bookNode(w) {
   };
   btn.addEventListener('click', (e) => { e.stopPropagation(); open(); });
   wrap.append(btn, box);
-  if (!state.hideMeaning) open();
   return wrap;
 }
 
 function cardNode(w) {
   const el = document.createElement('article');
   const masked = state.coverWord;
-  const hasBook = (w.sm && w.sm.length) || (w.sp && w.sp.length);
+  const hasBook = !!(w.sb && w.sb.length);
   el.className = 'card' + (state.mastered.has(w.w) ? ' done' : '') + (masked ? ' masked' : '');
   el.innerHTML =
     '<div class="spk">🔊</div>' +

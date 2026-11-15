@@ -106,6 +106,20 @@ def join_split_entries(text):
 
 
 def parse(text):
+    """解析成「按书本顺序排列的块」。
+
+    每个词条是一条 blocks 列表，顺序和书上完全一致：
+
+        {"k": "记", "v": "本身为词根，意为“前”→…"}
+        {"k": "义", "pos": "n.", "def": "[C,U] 进步；进展"}
+        {"k": "例", "p": "scientific advances", "t": "科学进步"}
+        {"k": "扩", "v": "[族] advancement n. 进步"}
+        {"k": "近", "v": "progressive a. 先进的"}
+        {"k": "反", "v": "primitive a. 落后的"}
+
+    分开放（senses 一坨、phrases 一坨）的话，义项和它下面的例句就配不上对，
+    书上是一义项带几条例句交替排的，只能按顺序存。
+    """
     entries, cur = {}, None
     after_meta = False       # 进了【扩】【近】【反】之后，搭配行要额外把关
     for line in join_split_entries(text):
@@ -123,15 +137,12 @@ def parse(text):
             # 只留真正的词条：单个词，或带连字符的复合词
             if not re.fullmatch(r"[a-z][a-z'\-]*", word):
                 continue
-            cur = entries.setdefault(word, {
-                "w": word, "senses": [], "phrases": [], "family": [],
-                "syn": [], "ant": [], "root": "",
-            })
+            cur = entries.setdefault(word, {"w": word, "blocks": []})
             after_meta = False
             # 这一批文档把【记】挤在词条行末尾了
             note = re.search(r"【记】\s*(.*)$", line)
             if note:
-                cur["root"] = MARK_TAG_RE.sub("", note.group(1)).strip()
+                cur["blocks"].append({"k": "记", "v": clean(note.group(1))})
             continue
 
         if cur is None:
@@ -143,15 +154,8 @@ def parse(text):
         if tag:
             kind = tag.group(1) or tag.group(2) or tag.group(3)
             body = clean(tag.group(4))
-            body = MARK_TAG_RE.sub("", body).strip()
-            if kind == "记":
-                cur["root"] = body
-            elif kind in ("扩", "族"):
-                cur["family"].append(body)
-            elif kind == "近":
-                cur["syn"].append(body)
-            else:
-                cur["ant"].append(body)
+            label = "扩" if kind in ("扩", "族") else kind
+            cur["blocks"].append({"k": label, "v": body})
             after_meta = True
             continue
 
@@ -167,14 +171,14 @@ def parse(text):
             if mm:
                 mark = "[" + mm.group(1) + "] "
                 body = body[mm.end():].strip()
-            cur["senses"].append({"pos": pos, "def": mark + body})
+            cur["blocks"].append({"k": "义", "pos": pos, "def": mark + body})
             after_meta = False
             continue
 
         # [C,U] 开头、没有词性的义项
         mm = MARK_RE.match(line)
         if mm:
-            cur["senses"].append({"pos": "", "def": "[" + mm.group(1) + "] " + line[mm.end():].strip()})
+            cur["blocks"].append({"k": "义", "pos": "", "def": "[" + mm.group(1) + "] " + line[mm.end():].strip()})
             after_meta = False
             continue
 
@@ -190,34 +194,44 @@ def parse(text):
             # 那些不能算到主词头上——除非这句里确实出现了主词本身
             if after_meta and not re.search(r"\b" + re.escape(cur["w"]), en.lower()):
                 continue
-            cur["phrases"].append({"p": en, "t": zh})
+            cur["blocks"].append({"k": "例", "p": en, "t": zh})
             continue
 
         # 剩下的是纯中文 → 上一个义项的续句（书上换行了，得补个分隔否则会粘成一团）
         if HAN_RE.search(line):
-            if cur["senses"]:
-                prev = cur["senses"][-1]["def"]
+            target = None
+            for b in reversed(cur["blocks"]):
+                if b["k"] == "义":
+                    target = b
+                    break
+                if b["k"] in ("记", "扩", "近", "反"):
+                    break            # 已经在元信息区，后面不会再有释义续句
+            if target:
+                prev = target["def"]
                 sep = "" if prev and prev[-1] in "；;，,。.】" else "；"
-                cur["senses"][-1]["def"] = prev + sep + line
-            else:
-                cur["senses"].append({"pos": "", "def": line})
+                target["def"] = prev + sep + line
     return entries
 
 
-def merge_senses(senses):
-    """把「词性 + 义项」压成手机上能看的一行。
+def senses_of(blocks):
+    return [b for b in blocks if b["k"] == "义"]
 
-    同一词性连续出现的义项合并成 `n. 进步；进展；进步`，
-    词性变了就另起一段，最多保留 3 段。
+
+def phrases_of(blocks):
+    return [b for b in blocks if b["k"] == "例"]
+
+
+def merge_senses(blocks):
+    """把义项压成手机上能看的一行（只用于控制台预览）。
+
+    同一词性连续出现的义项合并成 `n. 进步；进展；进步`，词性变了就另起一段。
     """
-    out = []
-    last_pos = None
-    for s in senses:
-        pos, d = s["pos"], s["def"].strip()
+    out, last_pos = [], None
+    for b in senses_of(blocks):
+        pos, d = b["pos"], b["def"].strip()
         if not d:
             continue
         if out and (pos == last_pos or not pos):
-            # 并进上一条时把重复的 [C,U] 标记去掉，只留每段第一个
             out[-1] += "；" + re.sub(r"^\[[^\]]{0,20}\]\s*", "", d)
         else:
             out.append((pos + " " if pos else "") + d)
@@ -236,22 +250,32 @@ def main():
         sys.exit("找不到文件: " + args.src)
     entries = parse(docx_to_text(args.src))
 
-    total_p = sum(len(e["phrases"]) for e in entries.values())
+    total_p = sum(len(phrases_of(e["blocks"])) for e in entries.values())
     print("词条 %d ｜ 搭配 %d 条 ｜ 平均每词 %.1f 条" %
           (len(entries), total_p, total_p / max(1, len(entries))))
-    no_p = [w for w, e in entries.items() if not e["phrases"]]
-    no_m = [w for w, e in entries.items() if not e["senses"]]
+    no_p = [w for w, e in entries.items() if not phrases_of(e["blocks"])]
+    no_m = [w for w, e in entries.items() if not senses_of(e["blocks"])]
     print("没有搭配:", no_p or "无")
     print("没有释义:", no_m or "无")
+    cnt = {}
+    for e in entries.values():
+        cnt["记"] = cnt.get("记", 0) + sum(1 for b in e["blocks"] if b["k"] == "记")
+        cnt["扩"] = cnt.get("扩", 0) + sum(1 for b in e["blocks"] if b["k"] == "扩")
+        cnt["近"] = cnt.get("近", 0) + sum(1 for b in e["blocks"] if b["k"] == "近")
+        cnt["反"] = cnt.get("反", 0) + sum(1 for b in e["blocks"] if b["k"] == "反")
+    print("记忆法 %d ｜ 派生 %d ｜ 近义 %d ｜ 反义 %d" % (cnt["记"], cnt["扩"], cnt["近"], cnt["反"]))
 
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(entries, f, ensure_ascii=False, indent=1)
     print("已写入", args.out)
 
     for w, e in list(entries.items())[: args.show or 0]:
-        print("\n[%s] %s" % (w, " / ".join(merge_senses(e["senses"]))))
-        for p in e["phrases"]:
-            print("   · %-46s %s" % (p["p"], p["t"]))
+        print("\n[%s] %s" % (w, " / ".join(merge_senses(e["blocks"]))))
+        for b in e["blocks"]:
+            if b["k"] == "例":
+                print("   · %-46s %s" % (b["p"], b["t"]))
+            elif b["k"] != "义":
+                print("   【%s】%s" % (b["k"], b["v"]))
 
 
 if __name__ == "__main__":

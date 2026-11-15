@@ -131,13 +131,13 @@ main{padding:12px 16px calc(84px + var(--safe-b))}
   padding:2px 0;color:var(--accent);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
 .card .fold .arw{font-style:normal;font-size:10px}
 .card .extra{margin-top:7px;padding:9px 11px;background:var(--soft);border-radius:10px}
-.card .def{margin:0 0 5px;font-size:13px;color:var(--ink);line-height:1.55;opacity:.86}
-.card .def:last-of-type{margin-bottom:0}
-.card .phrs{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);
-  display:flex;flex-direction:column;gap:5px}
-.card .extra > .phrs:first-child{margin-top:0;padding-top:0;border-top:0}
+.card .def{margin:0 0 3px;font-size:13px;color:var(--ink);line-height:1.55;opacity:.86}
+/* 【记】【扩】【近】【反】——比释义淡一档，不抢主体 */
+.card .note{margin:7px 0 2px;font-size:12px;color:var(--muted);line-height:1.5}
+.card .note b{color:var(--accent);font-weight:600;margin-right:3px;opacity:.85}
+.card .note:first-child{margin-top:0}
 .card .phr{display:flex;flex-wrap:wrap;gap:6px;font-size:12.5px;line-height:1.45;cursor:pointer;
-  margin:0 -5px;padding:3px 5px;border-radius:7px;transition:background .15s}
+  margin:1px -5px 1px 8px;padding:2px 5px;border-radius:7px;transition:background .15s}
 .card .phr:active .pen{color:var(--accent)}
 .card .phr.on{background:var(--card)}
 .card .phr.on .pen{color:var(--accent)}
