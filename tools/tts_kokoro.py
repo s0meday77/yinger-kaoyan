@@ -80,6 +80,7 @@ def main():
     ap.add_argument("--only", default="", help="只重录这些词，逗号分隔（调试用）")
     ap.add_argument("--apply", action="store_true",
                     help="录完后把 words.json 里的音频路径指到新文件")
+    ap.add_argument("--dir", default="neu", help="输出到 audio/<dir>/（多音色时分开存）")
     args = ap.parse_args()
 
     if not os.path.exists(MODEL):
@@ -108,9 +109,9 @@ def main():
         base = os.path.join(os.path.dirname(WORDS), "audio")
         # 美音、英音各一套：口音开关还能用，不是摆设
         # （不填 --ukvoice 就只做一套，英音也指过去）
-        tracks = [("neu", args.voice, "en-us")]
+        tracks = [(args.dir, args.voice, "en-us")]
         if args.ukvoice:
-            tracks.append(("neu_uk", args.ukvoice, "en-gb"))
+            tracks.append((args.dir + "_uk", args.ukvoice, "en-gb"))
 
         done = 0
         for w in todo:
@@ -143,9 +144,9 @@ def main():
                 if not w.get("us_audio"):
                     continue
                 name = w["w"].lower().replace(" ", "_").replace("/", "_")
-                if not os.path.exists(os.path.join(base, "neu", name + ".mp3")):
+                if not os.path.exists(os.path.join(base, args.dir, name + ".mp3")):
                     continue
-                w["us_audio"] = "audio/neu/%s.mp3" % name
+                w["us_audio"] = "audio/%s/%s.mp3" % (args.dir, name)
                 if os.path.exists(os.path.join(base, uk_track, name + ".mp3")):
                     w["uk_audio"] = "audio/%s/%s.mp3" % (uk_track, name)
                 changed += 1

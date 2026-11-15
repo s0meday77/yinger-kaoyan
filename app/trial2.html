@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>夹子音试听 · 考研英二</title>
+<style>
+  :root{
+    --bg:#faf7f8; --card:#fff; --ink:#221c1f; --muted:#8a7f84;
+    --line:#f0e6ea; --accent:#e8577f; --soft:#fdeef3;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#161214;--card:#211a1e;--ink:#f0e8ec;--muted:#9d8f96;--line:#312730;--accent:#ff7fa4;--soft:#2c2028}
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;padding:20px 16px 70px;background:var(--bg);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+  h1{font-size:19px;margin:0 0 6px}
+  .lead{margin:0 0 4px;color:var(--muted);font-size:13px}
+  .tip{margin:0 0 18px;color:var(--muted);font-size:12.5px;background:var(--soft);
+    border-radius:10px;padding:9px 12px;line-height:1.6}
+  .v{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:13px 13px 9px;margin-bottom:12px}
+  .v.ref{border-color:var(--accent);box-shadow:0 0 0 2px var(--soft)}
+  .vhead{display:flex;align-items:baseline;gap:7px;margin-bottom:9px;flex-wrap:wrap}
+  .vname{font-weight:700;font-size:15px}
+  .vtag{font-size:11px;color:var(--accent);background:var(--soft);border-radius:6px;padding:1px 6px}
+  .vid{font-size:10.5px;color:var(--muted);font-family:ui-monospace,monospace}
+  .line{display:flex;align-items:center;gap:7px;padding:5px 0;border-top:1px dashed var(--line)}
+  .line:first-of-type{border-top:0}
+  .pitch{flex:0 0 52px;font-size:11.5px;color:var(--muted);font-weight:600}
+  .row{display:flex;flex-wrap:wrap;gap:5px;flex:1}
+  button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--bg);
+    color:var(--ink);border-radius:9px;padding:6px 10px;font-size:13px;transition:.13s}
+  button:active{transform:scale(.96)}
+  button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  button.all{background:var(--soft);border-color:transparent;color:var(--accent);font-weight:700;
+    font-size:12px;padding:6px 10px}
+  button.phr{flex-basis:100%;text-align:left;font-size:12.5px;color:var(--muted)}
+  button.phr.on{color:#fff}
+  .foot{margin-top:20px;color:var(--muted);font-size:12.5px;line-height:1.7}
+</style>
+</head>
+<body>
+<h1>夹子音试听</h1>
+<p class="lead">五个底嗓 × 三档音高，找回林志玲那种甜、软、带气声的感觉。</p>
+<p class="tip">音高那栏：<b>原声</b>是模型本来声音，<b>+3</b> 甜一点，<b>+5</b> 最接近导航里那种娃娃音。听的时候留意——音高抬太多会有电音味，找到那个刚好不假的档位就行。</p>
+<div id="list"></div>
+<p class="foot">词：advance · recognize · opportunity<br>词组：advances in technology</p>
+<script>
+const BASES = [
+  ['af_heart',  '你现在选的 · 自然亲和', '参照', [0, 3, 5]],
+  ['af_bella',  '甜 · 最自然也最像真人', '', [0, 3, 5]],
+  ['af_sky',    '嫩 · 年轻轻快', '', [0, 3, 5]],
+  ['af_alloy',  '软 · 绵一点', '', [0, 3, 5]],
+  ['af_aoede',  '俏 · 带点上扬', '', [0, 3, 5]],
+  ['af_nicole', '气 · 轻声细语', '', [0, 3, 5]],
+];
+const WORDS = ['advance', 'recognize', 'opportunity'];
+const PHRASE = 'advances in technology';
+const audio = new Audio();
+let playingBtn = null;
+
+function playOne(btn, src, chain) {
+  if (playingBtn) playingBtn.classList.remove('on');
+  audio.pause();
+  audio.src = src;
+  playingBtn = btn;
+  btn.classList.add('on');
+  audio.onended = () => {
+    btn.classList.remove('on');
+    if (chain && chain.length) playOne(btn, chain.shift(), chain);
+  };
+  audio.onerror = () => btn.classList.remove('on');
+  audio.play().catch(() => btn.classList.remove('on'));
+}
+
+const list = document.getElementById('list');
+BASES.forEach(([id, name, tag, pitches]) => {
+  const box = document.createElement('div');
+  box.className = 'v' + (tag ? ' ref' : '');
+  box.innerHTML = '<div class="vhead"><span class="vname">' + name + '</span>' +
+    (tag ? '<span class="vtag">' + tag + '</span>' : '') +
+    '<span class="vid">' + id + '</span></div>' +
+    pitches.map((p) =>
+      '<div class="line"><span class="pitch">' + (p ? '+' + p + ' 半音' : '原声') + '</span>' +
+      '<div class="row" data-tag="' + id + '_s' + p + '"></div></div>').join('');
+
+  pitches.forEach((p) => {
+    const row = box.querySelector('.row[data-tag="' + id + '_s' + p + '"]');
+    const seq = [];
+    WORDS.forEach((w, i) => {
+      const src = 'data/audio/cute/' + id + '_s' + p + '_' + i + '.mp3';
+      seq.push(src);
+      const b = document.createElement('button');
+      b.textContent = w;
+      b.addEventListener('click', () => playOne(b, src));
+      row.appendChild(b);
+    });
+    const pb = document.createElement('button');
+    pb.className = 'phr';
+    pb.textContent = '▸ ' + PHRASE;
+    pb.addEventListener('click', () => playOne(pb, 'data/audio/cute/' + id + '_s' + p + '_3.mp3'));
+    row.appendChild(pb);
+    const all = document.createElement('button');
+    all.className = 'all';
+    all.textContent = '▶ 连播';
+    all.addEventListener('click', () => playOne(all, seq[0], seq.slice(1)));
+    row.appendChild(all);
+  });
+  list.appendChild(box);
+});
+</script>
+</body>
+</html>
