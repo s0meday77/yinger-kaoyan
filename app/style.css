@@ -123,6 +123,23 @@ main{padding:12px 16px calc(84px + var(--safe-b))}
   background:transparent;color:transparent;font-size:13px;display:grid;place-items:center;cursor:pointer}
 .card.done .chk{background:var(--ok);border-color:var(--ok);color:#fff}
 .card.done .w{color:var(--muted)}
+
+/* 书上的释义与词组：默认收起，想背单词就只看单词 */
+.card .book{margin-top:6px}
+.card .book[hidden]{display:none}
+.card .fold{display:inline-flex;align-items:center;gap:5px;background:none;border:0;
+  padding:2px 0;color:var(--accent);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.card .fold .arw{font-style:normal;font-size:10px}
+.card .extra{margin-top:7px;padding:9px 11px;background:var(--soft);border-radius:10px}
+.card .def{margin:0 0 5px;font-size:13px;color:var(--ink);line-height:1.55;opacity:.86}
+.card .def:last-of-type{margin-bottom:0}
+.card .phrs{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);
+  display:flex;flex-direction:column;gap:5px}
+.card .extra > .phrs:first-child{margin-top:0;padding-top:0;border-top:0}
+.card .phr{display:flex;flex-wrap:wrap;gap:6px;font-size:12.5px;line-height:1.45;cursor:pointer}
+.card .phr:active .pen{color:var(--accent)}
+.card .phr .pen{color:var(--ink);font-weight:500;opacity:.92}
+.card .phr .pzh{color:var(--muted)}
 .empty{color:var(--muted);text-align:center;font-size:14px;padding:36px 0}
 
 /* 听写 */

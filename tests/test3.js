@@ -24,8 +24,9 @@ window.Audio = class {
   play() { setTimeout(() => this.onended && this.onended(), 0); return Promise.resolve(); }
   pause() {}
 };
-window.speechSynthesis = { speak() {}, cancel() {} };
-window.SpeechSynthesisUtterance = class {};
+const said = [];
+window.speechSynthesis = { speak(u) { said.push(u); }, cancel() {} };
+window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
 window.navigator.serviceWorker = { register: async () => {} };
 window.HTMLElement.prototype.scrollIntoView = function () {};
 
@@ -133,18 +134,47 @@ const check = (n, c, e = '') => out.push(`${c ? '✅' : '❌'} ${n}${e ? ' — '
   $$('.page-chip')[1].click();
   await sleep(60);
 
+  // 已导入书上内容的词，释义和词组收在折叠区里；没导入的还是原来那行释义
+  const meaningText = () => {
+    const c = $$('#wordList .card')[0];
+    const m = c.querySelector('.m');
+    if (m) return m.hidden ? '' : m.textContent;
+    const extra = c.querySelector('.extra');
+    return extra && !extra.hidden ? extra.textContent : '';
+  };
   const card0 = $$('#wordList .card')[0];
-  check('释义默认显示', card0.querySelector('.m').hidden === false && card0.querySelector('.m').textContent.length > 1,
-    card0.querySelector('.m').textContent);
+  check('释义默认显示', meaningText().length > 1, meaningText().slice(0, 40));
   const meanBox = $('#optMean');
   meanBox.checked = false;
   meanBox.dispatchEvent(new window.Event('change'));
   await sleep(40);
-  check('取消「释义」就藏起来', $$('#wordList .card')[0].querySelector('.m').hidden === true, '');
+  check('取消「释义」就藏起来', meaningText() === '', '');
   meanBox.checked = true;
   meanBox.dispatchEvent(new window.Event('change'));
   await sleep(40);
-  check('勾上「释义」又显示', $$('#wordList .card')[0].querySelector('.m').hidden === false, '');
+  check('勾上「释义」又显示', meaningText().length > 1, '');
+
+  // ---- 书上的释义 + 词组 ----
+  const bookCard = [...$$('#wordList .card')].find((c) => c.querySelector('.book'));
+  check('导入过书中内容的词有折叠入口', !!bookCard, bookCard ? bookCard.querySelector('.w').textContent : '');
+  const foldBtn = bookCard.querySelector('.fold');
+  const extra = bookCard.querySelector('.extra');
+  check('折叠区默认展开（跟随「释义」设置）', extra.hidden === false, '');
+  foldBtn.click();
+  check('点一下收起来', extra.hidden === true && foldBtn.querySelector('.arw').textContent === '▸', '');
+  foldBtn.click();
+  check('再点一下展开', extra.hidden === false && foldBtn.querySelector('.arw').textContent === '▾', '');
+  check('书上释义按词性分行', bookCard.querySelectorAll('.def').length >= 1, `${bookCard.querySelectorAll('.def').length} 行`);
+  const phrRows = [...bookCard.querySelectorAll('.phr')];
+  check('词组英文和中文都在', phrRows.length > 0 && phrRows.every((r) =>
+    r.querySelector('.pen').textContent.trim() && r.querySelector('.pzh').textContent.trim()), `${phrRows.length} 条`);
+  said.length = 0;
+  played.length = 0;
+  phrRows[0].click();
+  await sleep(30);
+  check('点词组单独朗读它', said.length === 1 && said[0].text.startsWith(phrRows[0].querySelector('.pen').textContent),
+    said.map((u) => u.text).join(' / '));
+  check('点词组不会顺带播单词', played.length === 0, `播放 ${played.length} 次`);
   check('头部已掌握统计', /^\d+$/.test($('#doneNum').textContent) && /^\d+$/.test($('#totalNum').textContent),
     `${$('#doneNum').textContent} / ${$('#totalNum').textContent}`);
 

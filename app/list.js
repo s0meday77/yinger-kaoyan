@@ -10,15 +10,81 @@ function filtered() {
   });
 }
 
+/** 书上的释义 + 词组，做成可折叠的一块——想只背单词就收起来 */
+function bookNode(w) {
+  const wrap = document.createElement('div');
+  wrap.className = 'book';
+
+  const btn = document.createElement('button');
+  btn.className = 'fold';
+  btn.type = 'button';
+  const phrs = w.sp || [];
+  const defs = w.sm || [];
+  const parts = [];
+  if (defs.length) parts.push('释义');
+  if (phrs.length) parts.push('词组 ' + phrs.length);
+  btn.innerHTML = '<i class="arw">▸</i><span>' + parts.join(' · ') + '</span>';
+
+  const box = document.createElement('div');
+  box.className = 'extra';
+  box.hidden = true;
+
+  defs.forEach((d) => {
+    const p = document.createElement('p');
+    p.className = 'def';
+    p.textContent = d;
+    box.appendChild(p);
+  });
+
+  if (phrs.length) {
+    const list = document.createElement('div');
+    list.className = 'phrs';
+    phrs.forEach((item) => {
+      const row = document.createElement('div');
+      row.className = 'phr';
+      const en = document.createElement('span');
+      en.className = 'pen';
+      en.textContent = item.p;
+      const zh = document.createElement('span');
+      zh.className = 'pzh';
+      zh.textContent = item.t;
+      row.append(en, zh);
+      // 点词组单独朗读它，只读一遍，不跟着「每词朗读」跑三遍
+      row.addEventListener('click', (e) => {
+        e.stopPropagation();
+        stopAudio();
+        const keep = state.repeats;
+        state.repeats = 1;
+        speakTTS(item.p);
+        state.repeats = keep;
+      });
+      list.appendChild(row);
+    });
+    box.appendChild(list);
+  }
+
+  // 设了「释义点开才看」就默认收起，否则一进来就摊开
+  const open = () => {
+    box.hidden = !box.hidden;
+    btn.classList.toggle('open', !box.hidden);
+    btn.querySelector('.arw').textContent = box.hidden ? '▸' : '▾';
+  };
+  btn.addEventListener('click', (e) => { e.stopPropagation(); open(); });
+  wrap.append(btn, box);
+  if (!state.hideMeaning) open();
+  return wrap;
+}
+
 function cardNode(w) {
   const el = document.createElement('article');
   const masked = state.coverWord;
+  const hasBook = (w.sm && w.sm.length) || (w.sp && w.sp.length);
   el.className = 'card' + (state.mastered.has(w.w) ? ' done' : '') + (masked ? ' masked' : '');
   el.innerHTML =
     '<div class="spk">🔊</div>' +
     '<div class="body"><div class="wline"><span class="w"></span>' +
     '<span class="ipa"></span><span class="list-tag"></span></div>' +
-    '<div class="m"></div></div>' +
+    (hasBook ? '' : '<div class="m"></div>') + '</div>' +
     '<button class="chk" aria-label="标记掌握">✓</button>';
   const wEl = el.querySelector('.w');
   const mEl = el.querySelector('.m');
@@ -27,9 +93,17 @@ function cardNode(w) {
   // 专业词（如 EasyNegative、DPM++ 2M）查不到音标，留空别显示成 //
   el.querySelector('.ipa').textContent = ipa ? '/' + ipa + '/' : '';
   el.querySelector('.list-tag').textContent = (w.list || '').replace('Word List ', 'L');
-  mEl.textContent = w.m;
-  // 「释义」勾选框控制显示，取消勾选就整列藏起来
-  mEl.hidden = state.hideMeaning;
+  // 有书上内容的词，释义和词组都收进折叠区，主行不再重复有道释义
+  if (hasBook) {
+    const book = bookNode(w);
+    // 听音猜词时先藏着，词组里写着单词本身，一露馅就没得猜了
+    if (masked) book.hidden = true;
+    el.querySelector('.body').appendChild(book);
+  } else {
+    mEl.textContent = w.m;
+    // 「释义」勾选框控制显示，取消勾选就整列藏起来
+    mEl.hidden = state.hideMeaning;
+  }
 
   el.addEventListener('click', (e) => {
     if (e.target.closest('.chk')) return;
@@ -41,6 +115,8 @@ function cardNode(w) {
       if (masked) {
         wEl.textContent = w.w;
         el.classList.remove('masked');
+        const book = el.querySelector('.book');
+        if (book) book.hidden = false;
       }
     });
   });

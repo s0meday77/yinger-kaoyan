@@ -39,6 +39,8 @@
 │   ├── json2js.py            words.json → words.js
 │   ├── audit.py              词库体检
 │   ├── crosscheck.py         第二词典独立核对
+│   ├── parse_star.py         《词汇闪过》OCR 文本 → 释义/词组 JSON
+│   ├── merge_star.py         把书上的释义/词组挂进 words.json（新字段 sm/sp）
 │   └── serve.py              局域网静态服务器
 └── 启动.command              双击启动服务器
 ```
@@ -186,6 +188,30 @@ python3 -I tools/crosscheck.py app/data/words.json --out src/crosscheck.json
 
 交接给下一个会话时，先读本文件 + `memory/英二考研项目.md`，再看 `git log --oneline -10` 对版本。
 
+## 《词汇闪过》释义与词组导入（进行中）
+
+用户用豆包拍照识别成 docx 放桌面（如 `词汇闪过1-15页.docx`），按这个跑：
+
+```bash
+cd /Users/diting/英二考研
+# 1. 先看解析对不对（抽样打印）
+python3 -I tools/parse_star.py ~/Desktop/词汇闪过1-15页.docx --out /tmp/star.json --show 5
+# 2. 匹配进词库（未匹配的词会列出来）
+python3 -I tools/merge_star.py ~/Desktop/词汇闪过1-15页.docx
+# 3. 重新导出 + 回归
+python3 -I tools/json2js.py app/data/words.json app/data/words.js
+cd tests && node test3.js
+```
+
+- 书上内容写进**新字段**：`sm` 释义（按词性分行的数组）、`sp` 词组（`{p,t}` 数组）。
+  **不覆盖**有道的 `m` —— 还没导入的词继续显示有道释义，两套并存好区分
+- 前端：有 `sm`/`sp` 的词，释义和词组收进卡片折叠区（`▾ 释义 · 词组 N`），
+  点某条词组单独用系统语音朗读；没有这些字段的词维持原样
+- 解析靠「词条行 = 单词 + [音标]」分节：词性行开新义项，纯中文行是上一义项的换行续句，
+  英文+中文的行是搭配；词条之前的 `ag, act 做` 是词根标题，忽略
+- 书上有 `【近]` 这种半角错字、`【族】` 派生词，解析器都兼容了
+- **进度**：1~15 页 58 词 / 301 条搭配已导入；按用户给的页段继续往下做
+
 ## 读音五重保障
 
 1. **每页 OCR 词数必须等于书上印的 "/NN 词"** —— 对不上就重扫
@@ -266,6 +292,7 @@ python3 -I tools/crosscheck.py app/data/words.json --out src/crosscheck.json
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v22 | 2026-11-16 | 单词卡支持折叠显示《词汇闪过》的释义与词组（书上前 15 页 58 词已导入，其余词继续用有道释义）；点词组单独朗读 |
 | v21 | 2026-11-01 | 新增独立章节「ComfyUI词汇」：80 词 / 5 页 / 20 天（负面嵌入→正面提示词→核心节点→采样参数→模型与概念）。页按钮显示中文名而非数字；专业词音标缺失时不再显示 `//`，无真人录音自动走系统 TTS |
 | v20 | 2026-10-29 | 点听页加「回到顶部」悬浮箭头（下滑 360px 浮出，平滑回顶，切标签自动收起） |
 | v19 | 2026-10-29 | 中频词 9 页 635 词上线（Word List 1~9、36 天）；释义提取规则重写（不再硬切、不漏常用义项） |
