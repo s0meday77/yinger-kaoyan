@@ -171,7 +171,11 @@ python3 -I tools/crosscheck.py app/data/words.json --out src/crosscheck.json
 - 记忆法 87 ｜ 派生 88 ｜ 近义 62 ｜ 反义 16
 - 累计已导入 **259 词 / 1259 条搭配**（Word List 1 + 2 + 3 全覆盖）
 - `test3.js` **79/79** 通过，`filetest.js` 正常
-- 版本号已升到 **v29**（`app/sw.js` 的 `VER` + `app/index.html` 的 `<meta name="app-ver">` 两处）
+- 版本号 **v29**（`app/sw.js` 的 `VER` + `app/index.html` 的 `<meta name="app-ver">` 两处）
+- **已发版并线上验证**：两个站点都是 v29，线上 `words.json` 259 词 / 1259 条，
+  `data/audio/ph/f/advance_0.mp3` 等抽查 HTTP 200
+- 用户当晚已在手机上「📥 打包到手机」并试听，**读音、音色、词组朗读都通过**；
+  「释义和书上逐条对照」这件事留到 2026-11-17 抽空做
 
 ### 准确性是怎么验的（下次照做）
 
@@ -200,11 +204,24 @@ python3 -I tools/crosscheck.py app/data/words.json --out src/crosscheck.json
   被收掉时 m/f 只录到 `fundamental` 就停了、计数一直卡在 815。**别用链式子进程跑长任务**，
   直接一个 key 一条命令地跑，跑完查计数
 
-### 下次开工的顺序
+### 下次开工的顺序（2026-11-17）
 
 1. `git pull` 后先跑 `python3 -I tools/audit.py app/data/words.json` + `cd tests && node test3.js`
-2. 接着做 **66 页往后的 Word List 3 剩余 76 词**（词库下一个是 `elaborate`）
-3. 每批照「准确性是怎么验的」那节核对，别跳
+2. **先陪用户对书**：他要用手机 App 逐条对纸质书（1~65 页、259 词）。
+   发现对不上就定位到「单词 + 第几块」，改 `parse_star.py` 后重跑四批 + `merge_star` + `json2js`
+   （`/tmp/verify2.py` 是那个逐行核对脚本，重启后可能没了，按「准确性是怎么验的」那节重写）
+3. 接着做 **66 页往后的 Word List 3 剩余 76 词**（词库下一个是 `elaborate`）
+4. 每批照「准确性是怎么验的」那节核对，别跳
+
+### 发版清单（这次踩齐了，照抄即可）
+
+1. 改 `app/sw.js` 的 `VER` + `app/index.html` 的 `<meta name="app-ver">`（两处必须一致）
+2. `python3 -I tools/json2js.py`
+3. `cd tests && node test3.js`（79/79）+ `node filetest.js`
+4. 提交推 `yinger-kaoyan`，再 `rsync -a --delete --exclude='.git' app/ /tmp/kyy-publish/` 推 `kaoyan-yinger`
+5. **两个站都要验**：`curl` 各自的 `index.html`，`app-ver` 两边都是新版本才算发完；
+   GitHub Pages legacy 构建 3~5 分钟，`gh api repos/s0meday77/kaoyan-yinger/pages/builds/latest --jq .status`
+6. 告诉用户重新「📥 打包到手机」**别忘了，这次是 8712 个音频 / 约 136MB，要提醒他别锁屏**
 
 ### 留给下一批的解析笔记
 
