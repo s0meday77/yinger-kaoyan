@@ -71,21 +71,51 @@ def split_pair(line):
     i = first_han(line)
     if i <= 0:
         return None, None
-    en = line[:i].strip(" ,，、;；")
-    zh = line[i:].strip()
+    en = line[:i].strip(" ,，、;；(（[【")
+    # 英文后面那半截括号会落到中文里（「National Health Council(加拿大)…」），去掉
+    zh = re.sub(r"(?<=[一-鿿])\)", "", line[i:].strip())
     if not re.search(r"[A-Za-z]{2}", en) or not zh:
         return None, None
     return en, zh
 
 
+def join_split_entries(text):
+    """豆包偶尔把词条拆成两行：
+
+        decrease
+        [dɪˈkriːs] v.
+        [ˈdiːkriːs] n.
+
+    单独一个纯小写单词、下一行正好是音标，就合并成 `decrease [dɪˈkriːs] v.`，
+    其后紧跟的其它读音行（第二词性的音标）丢掉。
+    """
+    lines = []
+    raw = [l.strip() for l in text.splitlines()]
+    i = 0
+    while i < len(raw):
+        l = raw[i]
+        if re.fullmatch(r"[a-z][a-z'\-]*", l) and i + 1 < len(raw) and raw[i + 1].startswith("["):
+            lines.append(l + " " + raw[i + 1])
+            i += 2
+            while i < len(raw) and re.fullmatch(r"\[[^\]]{0,40}\]\s*[a-z.&/]*\s*", raw[i]):
+                i += 1
+            continue
+        lines.append(l)
+        i += 1
+    return lines
+
+
 def parse(text):
     entries, cur = {}, None
-    for raw in text.splitlines():
-        line = clean(raw)
+    after_meta = False       # 进了【扩】【近】【反】之后，搭配行要额外把关
+    for line in join_split_entries(text):
+        line = clean(line)
         if not line:
             continue
         if PAGE_RE.match(line):
             continue
+        if re.fullmatch(r"链\s*P\d+", line):
+            continue                     # 单独残留的跨页索引
 
         m = ENTRY_RE.match(line)
         if m:
@@ -97,16 +127,22 @@ def parse(text):
                 "w": word, "senses": [], "phrases": [], "family": [],
                 "syn": [], "ant": [], "root": "",
             })
+            after_meta = False
+            # 这一批文档把【记】挤在词条行末尾了
+            note = re.search(r"【记】\s*(.*)$", line)
+            if note:
+                cur["root"] = MARK_TAG_RE.sub("", note.group(1)).strip()
             continue
 
         if cur is None:
             continue                     # 词条之前的词根标题、页码碎行
 
         # 【近] 这种半角右括号的错字书上有，得一起认；【族】是派生词，同【扩】
-        tag = re.match(r"^【(记|扩|近|反|族)[】\]]\s*(.*)$", line)
+        # 这一批还有不带括号的写法：`扩 [族] xxx`、`[近] xxx`
+        tag = re.match(r"^(?:【(记|扩|近|反|族)[】\]]|(扩|近|反|族)\s+|\[(近|反|族|扩)\])\s*(.*)$", line)
         if tag:
-            kind, body = tag.group(1), clean(line)
-            body = re.sub(r"^【(记|扩|近|反|族)[】\]]\s*", "", body)
+            kind = tag.group(1) or tag.group(2) or tag.group(3)
+            body = clean(tag.group(4))
             body = MARK_TAG_RE.sub("", body).strip()
             if kind == "记":
                 cur["root"] = body
@@ -116,12 +152,15 @@ def parse(text):
                 cur["syn"].append(body)
             else:
                 cur["ant"].append(body)
+            after_meta = True
             continue
 
         # 词性行 → 新义项
         pm = POS_RE.match(line)
-        if pm and len(pm.group(1)) <= 8:
+        if pm and len(pm.group(1)) <= 12:
             pos = pm.group(1)
+            if pos == "vi.&vi.":
+                pos = "vt.&vi."      # 书上把 vt 打成了 vi，别照抄错的词性
             body = line[pm.end():].strip()
             mark = ""
             mm = MARK_RE.match(body)
@@ -129,12 +168,14 @@ def parse(text):
                 mark = "[" + mm.group(1) + "] "
                 body = body[mm.end():].strip()
             cur["senses"].append({"pos": pos, "def": mark + body})
+            after_meta = False
             continue
 
         # [C,U] 开头、没有词性的义项
         mm = MARK_RE.match(line)
         if mm:
             cur["senses"].append({"pos": "", "def": "[" + mm.group(1) + "] " + line[mm.end():].strip()})
+            after_meta = False
             continue
 
         en, zh = split_pair(line)
@@ -145,6 +186,10 @@ def parse(text):
                 continue
             if en.lower().strip() == cur["w"]:
                 continue                      # 「apt 适应」这种就是单词本身，不算搭配
+            # 【扩】后面常跟着派生词自己的例句（classify 下面挂着 classic 的例子），
+            # 那些不能算到主词头上——除非这句里确实出现了主词本身
+            if after_meta and not re.search(r"\b" + re.escape(cur["w"]), en.lower()):
+                continue
             cur["phrases"].append({"p": en, "t": zh})
             continue
 

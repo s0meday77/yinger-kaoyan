@@ -343,6 +343,11 @@ const check = (n, c, e = '') => out.push(`${c ? '✅' : '❌'} ${n}${e ? ' — '
   const cv = data.words.filter((w) => w.cat === 'ComfyUI词汇');
   check('ComfyUI词汇已并入', cv.length === 80, `${cv.length} 词`);
   check('ComfyUI词汇释义齐全', cv.every((w) => w.m && w.m.length > 4), '');
+  // 《词汇闪过》导入的数据：词组必须中英齐全，释义不能是空串
+  const starWords = data.words.filter((w) => w.sp || w.sm);
+  check('书中词组的英文和中文都不缺', starWords.every((w) =>
+    (!w.sp || w.sp.every((p) => p.p && p.t && p.p.length > 2)) &&
+    (!w.sm || w.sm.every((s) => typeof s === 'string' && s.length > 1))), `${starWords.length} 词`);
   check('ComfyUI词汇页标签是中文', (data.categories.find((c) => c.name === 'ComfyUI词汇') || { pages: [] })
     .pages.every((p) => p.short && !/^[0-9]+$/.test(p.short)), '');
 
