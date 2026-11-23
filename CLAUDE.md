@@ -297,6 +297,11 @@ python3 -I tools/verify_star.py app/data/words.json ~/Desktop/词汇闪过*.docx
 
 用户用豆包拍照识别成 docx 放桌面（如 `词汇闪过1-15页.docx`），按这个跑：
 
+> **13 份高频词 docx 已归档到 `src/star_docx/`**（2026-11-24，456KB，随仓库备份）。
+> 桌面原件可以删——`verify_star.py` 复核时改指归档目录即可：
+> `python3 -I tools/verify_star.py app/data/words.json src/star_docx/*.docx`
+> 中频词章节的 docx 也照这个放。
+
 ```bash
 cd /Users/diting/英二考研
 # 1. 先看解析对不对（抽样打印）
