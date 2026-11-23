@@ -41,8 +41,11 @@ POS_RE = re.compile(r"^(" + POS_TOKEN + r"(?:\.(?:&|/)\s*" + POS_TOKEN + r")*\.)
 MARK_RE = re.compile(r"^(?:\([a-zA-Z\-]+\)\s*)?\[([^\]]{1,20})\]\s*")
 HAN_RE = re.compile(r"[一-鿿]")
 PAGE_RE = re.compile(r"^Page\s*\d*\s*$", re.I)
-LINK_RE = re.compile(r"\s*链\s*P\d+\s*")          # 「链P46」是跨页索引，手机上看没用
+# 「链P46」是跨页索引，手机上看没用；106 页起豆包把「链」认成了「纯」
+LINK_RE = re.compile(r"\s*[链纯]\s*P\d+\s*")
 MARK_TAG_RE = re.compile(r"\[(族|近|反|派)\]")
+# 并排的近反义/派生行首标记（tab 版式里偶尔落在中间那格）
+TAG_START_RE = re.compile(r"^(?:【(记|扩|近|反|族)[】\]]|(扩|近|反|族)\s|\[(近|反|族|扩)\])")
 PREP_RE = re.compile(r"^(?:in|on|at|for|of|to|with|by|from|as|about|into|over|under)\b", re.I)
 DROPPED = []                                     # 被判定为 OCR 截断、丢掉的搭配
 CJK_PUNCT = "（【「《"
@@ -66,9 +69,31 @@ def first_han(s):
     return m.start() if m else -1
 
 
+def fix_ocr(s):
+    """豆包逐批出现过的固定认错，统一在这里改回来（verify_star 也用这一套）。"""
+    # 「v. link-v」被认成「v.-link」（106~124 页 constitute）
+    s = re.sub(r"^([a-z]{1,3})\.-link\b", r"\1. link-v", s)
+    # 括注没闭合、中间夹着「；」的（「（被认为或看作是；被算作」），
+    # 那个「；」其实是「）」认错了
+    if s.startswith("（") and "）" not in s and "；" in s:
+        s = s.replace("；", "）", 1)
+    return s
+
+
+def fix_cell(s):
+    """tab 格里的纯中文义项偶尔把「，」认成「→」（content：很符合自己心意的→满意的）。
+
+    【记】里的 → 是词根推导，绝不能动，所以只在 normalize_tabs 的格子上用。
+    """
+    if "→" in s and not re.search(r"[A-Za-z]", s):
+        s = s.replace("→", "，")
+    return s
+
+
 def clean(s):
     s = s.replace("​", "").strip()
     s = LINK_RE.sub(" ", s)
+    s = fix_ocr(s)
     return re.sub(r"\s+", " ", s).strip()
 
 
@@ -127,19 +152,34 @@ def normalize_tabs(text):
         if "\t" not in line:
             out.append(line)
             continue
-        cells = [c.strip() for c in line.split("\t")]
+        # 跨页索引先摘掉：106 页起豆包写成「纯P144」，留在最后一格会被当成释义续句
+        cells = [LINK_RE.sub(" ", c).strip() for c in line.split("\t")]
         if len(cells) >= 3:
-            # 第一格是词性、最后一格是例句、中间的都是义项
-            if cells[0]:
-                out.append(cells[0])
-            for c in cells[1:-1]:
-                if c:
-                    out.append(SENSE_MARK + c)
-            if cells[-1]:
-                out.append(cells[-1])
+            # 不能死认「第一格是词性」：125 页起第一格常是「用」「扩」这种分组小标题，
+            # 词性挪到了第二格。按内容认格子：
+            #   用/扩/近/反 → 小标题（parse 里本来就跳过）
+            #   纯词性格 → 单独成行，交给「词性行」分支
+            #   [近]/[族]… → 并排的近反义/派生
+            #   首格或末格 → 原样（带释义的词性行 / 例句）
+            #   中间其它 → 义项
+            for idx, c in enumerate(cells):
+                if not c:
+                    continue
+                if c in ("用", "扩", "近", "反", "记", "族", "派"):
+                    continue
+                if re.fullmatch(POS_TOKEN + r"(?:\.(?:&|/)\s*" + POS_TOKEN + r")*\.", c):
+                    out.append(c)
+                    continue
+                if TAG_START_RE.match(c):
+                    out.append(c)
+                    continue
+                if idx == 0 or idx == len(cells) - 1:
+                    out.append(fix_cell(c))
+                else:
+                    out.append(SENSE_MARK + fix_cell(c))
         else:
             # 两列：派生/近反义并排，各自独立成行
-            out.extend(c for c in cells if c)
+            out.extend(fix_cell(c) for c in cells if c)
     return out
 
 
@@ -231,6 +271,7 @@ def parse(text):
     书上是一义项带几条例句交替排的，只能按顺序存。
     """
     entries, cur = {}, None
+    aliases = {}                     # 词条行标了「亦作 xxx」的变体，判断搭配归属时算主词
     DROPPED.clear()
     lines = join_split_entries(normalize_tabs(text))
     known = set()
@@ -279,9 +320,10 @@ def parse(text):
             last_pos = ""
             # `centre [...]（亦作center）n.` —— 英美拼写变体，考研英二爱考，别丢
             tail = line[m.end():].strip()
-            alias = re.search(r"（亦作\s*([A-Za-z\- ]+)）", tail)
+            alias = re.search(r"[(（]亦作\s*([A-Za-z\- ]+)[)）]", tail)
             if alias:
                 cur["blocks"].append({"k": "注", "v": "亦作 " + alias.group(1).strip()})
+                aliases.setdefault(word, set()).add(alias.group(1).strip().lower())
                 tail = (tail[:alias.start()] + tail[alias.end():]).strip()
             # 这一批文档把【记】挤在词条行末尾了
             note = re.search(r"【记】\s*(.*)$", line)
@@ -303,9 +345,10 @@ def parse(text):
             continue                     # 词条之前的词根标题、页码碎行
 
         # defence 的「（亦作defense）n.」被豆包拆成了独立一行
-        alt = re.match(r"^（亦作\s*([A-Za-z\- ]+)）\s*(.*)$", line)
+        alt = re.match(r"^[(（]亦作\s*([A-Za-z\- ]+)[)）]\s*(.*)$", line)
         if alt:
             cur["blocks"].append({"k": "注", "v": "亦作 " + alt.group(1).strip()})
+            aliases.setdefault(cur["w"], set()).add(alt.group(1).strip().lower())
             pm3 = POS_RE.match(alt.group(2).strip())
             if pm3:
                 pending_pos = pm3.group(1)
@@ -332,6 +375,17 @@ def parse(text):
             label = "扩" if kind in ("扩", "族") else kind
             cur["blocks"].append({"k": label, "v": body})
             after_meta = True
+            pending_pos = ""
+            continue
+
+        # 双读音词条的第二行：`segment ['seɡmənt] n.` + `[seɡ'ment] v. 【记】…`
+        # 豆包把第二个音标和词性排到了行首，这一行只需要它的【记】，
+        # 不拦住的话会被当成「[xxx] 开头的义项」，整条混进释义里
+        mz = re.match(r"^\[[^\]]{1,40}\]\s*" + POS_TOKEN
+                      + r"(?:\.(?:&|/)\s*" + POS_TOKEN + r")*\.\s*【记】\s*(.*)$", line)
+        if mz:
+            cur["blocks"].append({"k": "记", "v": clean(mz.group(1))})
+            after_meta = False
             pending_pos = ""
             continue
 
@@ -372,22 +426,38 @@ def parse(text):
         if en:
             # 词根标题行也会落在这里（「ag, act 做 act 行动」「car, carr 车」），
             # 特征是英文部分只有一两个小写短词、可能用逗号并列，不像短语
-            if re.fullmatch(r"[a-z]{1,7}(?:,\s*[a-z]{1,7})*", en):
+            # 词根小标题也可能是大写（`VOC 叫喊`）
+            if re.fullmatch(r"[a-z]{1,7}(?:,\s*[a-z]{1,7})*", en, re.I):
                 continue
             # 「intellig 学会 intellect 学习」——词根小标题排在词条行正上方，
             # 后面跟的是带音标的词条。单个小写词 + 下一行就是词条，认作标题跳过
-            if re.fullmatch(r"[a-z]{1,12}", en):
+            if re.fullmatch(r"[a-z]{1,12}", en, re.I):
                 nxt = next((clean(x) for x in lines[li + 1:] if clean(x)), "")
                 if ENTRY_RE.match(nxt):
                     continue
-            if en.lower().strip() == cur["w"]:
+            self_names = [cur["w"]] + sorted(aliases.get(cur["w"], ()))
+            if en.lower().strip() in self_names:
                 continue                      # 「apt 适应」这种就是单词本身，不算搭配
             # 【扩】后面常跟着派生词自己的例句（classify 下面挂着 classic 的例子），
-            # 那些不能算到主词头上——除非这句里确实出现了主词本身。
+            # 那些不能算到主词头上——除非这句里确实出现了主词本身
+            # （或词条行标过的英美变体：enquiry 下的 inquiry、sceptical 下的 skeptical）。
             # 但跨页时书会把**下一个词**的例句也排在这里（conclude 段尾的
             # 「in conclusion 最后」、classify 段尾的 classical 例句），
             # 那就认出来是谁的，直接挂过去，别丢
-            if after_meta and not re.search(r"\b" + re.escape(cur["w"]), en.lower()):
+            def is_self(text):
+                t = text.lower()
+                if re.search(r"\b" + re.escape(cur["w"]), t):
+                    return True
+                # 变体允许词尾变化：inquiry → inquiries（y → ies）
+                for a in aliases.get(cur["w"], ()):
+                    forms = {a, a + "s"}
+                    if a.endswith("y"):
+                        forms.add(a[:-1] + "ies")
+                    if any(re.search(r"\b" + re.escape(f) + r"\b", t) for f in forms):
+                        return True
+                return False
+
+            if after_meta and not is_self(en):
                 toks = re.findall(r"[a-z][a-z'\-]{2,}", en.lower())
                 # 主词自己的派生词（书上漏印 [族]）：classifiable ← classify
                 if any(is_form_of(t, cur["w"]) for t in toks):
@@ -412,6 +482,15 @@ def parse(text):
 
         # 剩下的是纯中文 → 上一个义项的续句（书上换行了，得补个分隔否则会粘成一团）
         if HAN_RE.search(line):
+            # 词性单独占一行、下一行就是释义（`a.` / 令人愉快的…），
+            # 但前面可能已经排着【记】【扩】之类——先认领 pending_pos 开新义项，
+            # 别落到下面“续句”分支里被丢掉（86~105 页 15 个词就是这么丢的）
+            if pending_pos:
+                cur["blocks"].append({"k": "义", "pos": pending_pos, "def": line})
+                last_pos = pending_pos
+                pending_pos = ""
+                after_meta = False
+                continue
             target = None
             for b in reversed(cur["blocks"]):
                 if b["k"] == "义":

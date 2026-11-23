@@ -72,6 +72,7 @@ def hit(part, fields):
 
 def line_ok(line, fields):
     line = line.replace(P.SENSE_MARK, "").strip()
+    line = P.fix_ocr(line)             # 和 parse 用同一套 OCR 订正
     if not line:
         return True
     # 行首的分类标记（`扩 [族] …`/`[近] …`）词库里只存后面的内容
@@ -129,9 +130,9 @@ def is_root_title(line, next_line):
     en, _zh = P.split_pair(line)
     if not en:
         return False
-    if re.fullmatch(r"[a-z]{1,7}(?:,\s*[a-z]{1,7})*", en):
+    if re.fullmatch(r"[a-z]{1,7}(?:,\s*[a-z]{1,7})*", en, re.I):
         return True
-    if re.fullmatch(r"[a-z]{1,12}", en):
+    if re.fullmatch(r"[a-z]{1,12}", en, re.I):
         if P.ENTRY_RE.match(next_line or ""):
             return True
         # 「intellig 学会 intellect 学习」：中文段里又套了一个短英文词干
