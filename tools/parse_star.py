@@ -75,8 +75,9 @@ def first_han(s):
 
 def fix_ocr(s):
     """豆包逐批出现过的固定认错，统一在这里改回来（verify_star 也用这一套）。"""
-    # 「v. link-v」被认成「v.-link」（106~124 页 constitute）
-    s = re.sub(r"^([a-z]{1,3})\.-link\b", r"\1. link-v", s)
+    # 书上的「v.-link」是「v. 连系动词」的版式标记（106~124 页 constitute、
+    # 209 页 weigh），只留词性 v.——留着 link-v 会被当释义，weigh 还多出一条空义项
+    s = re.sub(r"^([a-z]{1,3})\.\s*-?\s*link(?:-v)?\b\s*", r"\1. ", s)
     # 括注没闭合、中间夹着「；」的（「（被认为或看作是；被算作」），
     # 那个「；」其实是「）」认错了
     if s.startswith("（") and "）" not in s and "；" in s:
@@ -236,6 +237,31 @@ def join_split_entries(text):
     return lines
 
 
+SIDE_TAG_SPLIT = re.compile(r"\s*(?=\[(?:族|近|反|派)\]|【(?:族|近|反|派)】)")
+
+
+def split_side_tags(body, default):
+    """把「并排在同一个格子里」的派生/近反义拆成多条块。
+
+    豆包 tab 版式会把 `[扩] admiration n. 钦佩  [近] appreciate vt. 欣赏`
+    压成一行，不拆的话【近】会混进【扩】的内容里。
+    返回 [(k, v), ...]，按原文顺序。
+    """
+    out, k = [], default
+    for part in SIDE_TAG_SPLIT.split(body):
+        part = part.strip()
+        if not part:
+            continue
+        m = MARK_TAG_RE.match(part)
+        if m:
+            k = m.group(1)
+            k = "扩" if k in ("扩", "族") else k
+            part = part[m.end():].strip()
+        if part:
+            out.append((k, part))
+    return out
+
+
 def is_form_of(tok, word):
     """tok 是不是 word 的变形或派生（classifiable ← classify、advances ← advance）。
 
@@ -260,6 +286,32 @@ def other_word(en, exclude, known):
     return None
 
 
+# 豆包偶尔把整条词条行（连音标）吞掉，义项和搭配直接挂到上一个词后面；
+# 190 页的 perform 就是这样，记忆法那一行还掉到了段尾（写成半角 [记]）。
+# 锚点用前一行的原文定位，补回词条行，并删掉那条掉队的半角 [记]（内容并进词条行）。
+LOST_ENTRY_PATCHES = [
+    dict(anchor="[近] contemporary n. 同辈人；同龄人",
+         entry="perform [pəˈfɔːm] v. 【记】执行(perform)完任务就陪你去看演出(performance)。",
+         drop="[记]执行(perform)完任务就陪你去看演出(performance)。"),
+]
+
+
+def patch_lost_entries(lines):
+    drops = {p["drop"] for p in LOST_ENTRY_PATCHES}
+    out = []
+    for ln in lines:
+        out.append(ln)
+        for p in LOST_ENTRY_PATCHES:
+            if ln.strip() == p["anchor"]:
+                out.append(p["entry"])
+    return [ln for ln in out if ln.strip() not in drops]
+
+
+def prep_lines(text):
+    """docx 原文 → 逐行列表（parse 和 verify_star 必须走同一套）。"""
+    return patch_lost_entries(join_split_entries(normalize_tabs(text)))
+
+
 def parse(text):
     """解析成「按书本顺序排列的块」。
 
@@ -279,7 +331,7 @@ def parse(text):
     entries, cur = {}, None
     aliases = {}                     # 词条行标了「亦作 xxx」的变体，判断搭配归属时算主词
     DROPPED.clear()
-    lines = join_split_entries(normalize_tabs(text))
+    lines = prep_lines(text)
     known = set()
     for l in lines:
         me = ENTRY_RE.match(l)
@@ -290,7 +342,9 @@ def parse(text):
     after_meta = False       # 进了【扩】【近】【反】之后，搭配行要额外把关
     pending_pos = ""         # 词性单独占一行时，等下一行义项来认领
     last_pos = ""            # 最近一次出现的词性，tab 版式的续行义项要继承它
+    prev_blocks = []         # 上一个词条的块：识别被重复抄录的跨页索引行
     for li, line in enumerate(lines):
+        raw = line
         # tab 版式明确标出来的义项：这一格内容就是释义，去做例句判断
         if line.startswith(SENSE_MARK):
             body = clean(line[1:])
@@ -320,6 +374,8 @@ def parse(text):
             # 只留真正的词条：单个词，或带连字符的复合词
             if not re.fullmatch(r"[a-z][a-z'\-]*", word):
                 continue
+            if cur is not None and cur["w"] != word:
+                prev_blocks = cur["blocks"]
             cur = entries.setdefault(word, {"w": word, "blocks": []})
             after_meta = False
             pending_pos = ""
@@ -379,7 +435,19 @@ def parse(text):
                 kind = inner.group(1)
                 body = body[inner.end():].strip()
             label = "扩" if kind in ("扩", "族") else kind
-            cur["blocks"].append({"k": label, "v": body})
+            # 半角 [ 残留：`[扩][oddly ad. 怪异地；反常地` 内容前多一个没闭合的 [
+            if body.startswith("[") and "]" not in body:
+                body = body[1:].strip()
+            # 跨页索引行会被豆包重复抄到下一个词条（190 页 odd 段尾又抄了一遍
+            # occupation 的「[近] profession n. 职业  链P202」）：带索引、且与
+            # 上一个词条的同类块一模一样，判为重复抄录，跳过
+            if re.search(r"[链纯]\s*P\d+", raw) and any(
+                    b["k"] == label and b.get("v") == body for b in prev_blocks):
+                continue
+            # tab 并排两格会合成一行：`admiration n. 钦佩 [近] appreciate vt. 欣赏`
+            # 按内层标记拆回多条，别把【近】混进【扩】里（2026-11-23 全书核出 73 处）
+            for kk, vv in split_side_tags(body, label):
+                cur["blocks"].append({"k": kk, "v": vv})
             after_meta = True
             pending_pos = ""
             continue

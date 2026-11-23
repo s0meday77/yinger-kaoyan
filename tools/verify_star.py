@@ -168,7 +168,7 @@ def main():
         if not os.path.exists(path):
             sys.exit("找不到文件: " + path)
         text = P.docx_to_text(path)
-        lines = P.join_split_entries(P.normalize_tabs(text))
+        lines = P.prep_lines(text)
         P.parse(text)                  # 只为填充 DROPPED
         segs = segments(lines)
 
