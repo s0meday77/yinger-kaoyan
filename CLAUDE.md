@@ -276,7 +276,8 @@ python3 -I tools/verify_star.py app/data/words.json ~/Desktop/词汇闪过*.docx
 - 书上印的 `/NN 词` 是唯一裁决标准，识别数和它对不上就是错
 - 页内天数固定 4 天，绝不跨页混排（用户要照着纸质书翻页对）
 
-交接给下一个会话时，先读本文件 + `memory/英二考研项目.md`，再看 `git log --oneline -10` 对版本。
+交接给下一个会话时，先读本文件 + `~/.claude/projects/-Users-diting-----/memory/英二考研项目.md`
+（2026-11-24 从 `ccagent` / `cc-agent` 两个旧项目的 memory 转移到本项目），再看 `git log --oneline -10` 对版本。
 
 ## 《词汇闪过》释义与词组导入（进行中）
 
