@@ -31,7 +31,8 @@ import subprocess
 import sys
 
 # 词条行：单词 + [音标]，后面可能跟 （亦作 center）n. 之类的尾巴
-ENTRY_RE = re.compile(r"^([A-Za-z][A-Za-z'\- ]*?)\s*\[[^\]]{0,40}\]")
+# 词条行：`word [音标] …`（豆包旧版式）或 `word /音标/ …`（145 页起的新版式）
+ENTRY_RE = re.compile(r"^([A-Za-z][A-Za-z'\- ]*?)\s*(?:\[[^\]]{0,40}\]|/[^/]{0,45}/)")
 # 词性：n. / vt. / vt.&vi. / a. / ad. / adj. 等——必须带句点，
 # 否则 "a dvances in technology" 这种搭配行会被误判成词性 a. + 释义
 POS_TOKEN = r"(?:n|v|vt|vi|a|ad|adj|adv|prep|conj|pron|num|art|int|aux)"
@@ -43,7 +44,7 @@ HAN_RE = re.compile(r"[一-鿿]")
 PAGE_RE = re.compile(r"^Page\s*\d*\s*$", re.I)
 # 「链P46」是跨页索引，手机上看没用；106 页起豆包把「链」认成了「纯」
 LINK_RE = re.compile(r"\s*[链纯]\s*P\d+\s*")
-MARK_TAG_RE = re.compile(r"\[(族|近|反|派)\]")
+MARK_TAG_RE = re.compile(r"[\[【](族|近|反|派)[\]】]")
 # 并排的近反义/派生行首标记（tab 版式里偶尔落在中间那格）
 TAG_START_RE = re.compile(r"^(?:【(记|扩|近|反|族)[】\]]|(扩|近|反|族)\s|\[(近|反|族|扩)\])")
 PREP_RE = re.compile(r"^(?:in|on|at|for|of|to|with|by|from|as|about|into|over|under)\b", re.I)
@@ -363,7 +364,7 @@ def parse(text):
 
         # 【近] 这种半角右括号的错字书上有，得一起认；【族】是派生词，同【扩】
         # 这一批还有不带括号的写法：`扩 [族] xxx`、`[近] xxx`
-        tag = re.match(r"^(?:【(记|扩|近|反|族)[】\]]|(扩|近|反|族)\s+|\[(近|反|族|扩)\])\s*(.*)$", line)
+        tag = re.match(r"^(?:【用】\s*)?(?:【(记|扩|近|反|族)[】\]]|(扩|近|反|族)\s+|\[(近|反|族|扩)\])\s*(.*)$", line)
         if tag:
             kind = tag.group(1) or tag.group(2) or tag.group(3)
             body = clean(tag.group(4))
