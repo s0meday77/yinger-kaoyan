@@ -65,7 +65,8 @@ async function playPhrase(w, idx, text, done) {
     if (blob.size < 500) throw new Error('音频不完整');
     url = URL.createObjectURL(blob);
   } catch (e) {
-    speakTTS(text, done);      // 还没录到这个音色，先用系统语音顶着
+    // 还没录到这个音色，先用系统语音顶着；`place/put …` 读 or 别读 slash
+    speakTTS(text.replace(/\s*\/\s*/g, ' or '), done);
     return;
   }
   playSrc(url, Math.max(1, state.repeats | 0), done, () => URL.revokeObjectURL(url));

@@ -32,10 +32,13 @@ import sys
 
 # 词条行：单词 + [音标]，后面可能跟 （亦作 center）n. 之类的尾巴
 # 词条行：`word [音标] …`（豆包旧版式）或 `word /音标/ …`（145 页起的新版式）
-ENTRY_RE = re.compile(r"^([A-Za-z][A-Za-z'\- ]*?)\s*(?:\[[^\]]{0,40}\]|/[^/]{0,45}/)")
+# 斜杠里只许音标字符：不然 `place/put emphasis on sth. 强调 / 重视某事`
+# 会被当成 place + 音标 /put emphasis on sth. /（171 页踩到）
+PHON = r"[A-Za-zəɪʊɒʌæɑɔɜðθʃʒŋɡɚɝːˈˌ'’\-()\s]{1,45}"
+ENTRY_RE = re.compile(r"^([A-Za-z][A-Za-z'\- ]*?)\s*(?:\[[^\]]{0,40}\]|/" + PHON + r"/)")
 # 词性：n. / vt. / vt.&vi. / a. / ad. / adj. 等——必须带句点，
 # 否则 "a dvances in technology" 这种搭配行会被误判成词性 a. + 释义
-POS_TOKEN = r"(?:n|v|vt|vi|a|ad|adj|adv|prep|conj|pron|num|art|int|aux)"
+POS_TOKEN = r"(?:n|v|vt|vi|a|ad|adj|adv|prep|conj|pron|num|art|int|aux|det|pl)"
 POS_RE = re.compile(r"^(" + POS_TOKEN + r"(?:\.(?:&|/)\s*" + POS_TOKEN + r")*\.)\s*")
 # 义项标记 [C,U] [C-常用sing.] [sing.,U] 等；
 # 书上还会在前面挂个括注：`(ethics) [pl.] 道德准则`
@@ -78,6 +81,8 @@ def fix_ocr(s):
     # 那个「；」其实是「）」认错了
     if s.startswith("（") and "）" not in s and "；" in s:
         s = s.replace("；", "）", 1)
+    # 行尾的圈码（⓪①②…）是书上标考频的符号，不进词库（152 页起大量出现）
+    s = re.sub(r"\s*[①-⑳⓪-⓿]+\s*$", "", s)
     return s
 
 

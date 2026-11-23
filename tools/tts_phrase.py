@@ -14,6 +14,7 @@
 import argparse
 import json
 import os
+import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -49,7 +50,8 @@ def main():
                 continue
             p = (b.get("p") or "").strip()
             if p:
-                jobs.append((w["w"], idx, p))
+                # `place/put emphasis on sth.` 这种并列写法，念 "or" 而不是 "slash"
+                jobs.append((w["w"], idx, re.sub(r"\s*/\s*", " or ", p)))
             idx += 1
     if args.limit:
         jobs = jobs[: args.limit]

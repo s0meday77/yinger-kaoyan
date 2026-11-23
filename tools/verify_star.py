@@ -75,6 +75,10 @@ def line_ok(line, fields):
     line = P.fix_ocr(line)             # 和 parse 用同一套 OCR 订正
     if not line:
         return True
+    # 纯词性行（`det.`、`vt.&vi.`）：书上是义项的分隔符，词库里记在块的 pos 上，
+    # fields_of 不比 pos，直接放行（double 的 det. 曾被误挂到 decide 名下）
+    if re.fullmatch(P.POS_TOKEN + r"(?:\.(?:&|/)\s*" + P.POS_TOKEN + r")*\.", line.rstrip()):
+        return True
     # 行首的分类标记（`扩 [族] …`/`[近] …`）词库里只存后面的内容
     line = re.sub(r"^(记|扩|近|反)\s*", "", line)
     line = re.sub(r"^\[(族|近|反|派)\]\s*", "", line)
