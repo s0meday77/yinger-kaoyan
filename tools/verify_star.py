@@ -33,6 +33,7 @@ def norm(s):
     """去空格标点、统一小写，只保留字母数字和汉字。"""
     s = str(s)
     s = s.replace(P.SENSE_MARK, "")
+    s = re.sub(r"链\s*P\d+", "", s)     # 跨页索引，词库里本来就不存
     out = []
     for ch in s:
         if ch.isspace() or ch in PUNCT:
@@ -73,6 +74,9 @@ def line_ok(line, fields):
     line = line.replace(P.SENSE_MARK, "").strip()
     if not line:
         return True
+    # 行首的分类标记（`扩 [族] …`/`[近] …`）词库里只存后面的内容
+    line = re.sub(r"^(记|扩|近|反)\s*", "", line)
+    line = re.sub(r"^\[(族|近|反|派)\]\s*", "", line)
     # 书上 a. (dynamics) [pl.]… 这种英文括注只是词形提示，parse 有意不存，
     # 比对时连去括注的版本一起试（中文括号里的释义要保留）
     no_paren = re.sub(r"\([A-Za-z'\- ]{2,24}\)", "", line)
@@ -113,6 +117,8 @@ def skip_line(line):
         return True
     if P.PAGE_MARK_RE.match(line) or P.PAGE_RE.match(line):
         return True
+    if re.fullmatch(r"【?\s*Page\s*\d+\s*】?", line, re.I):
+        return True
     if LINK_ONLY.match(line):
         return True
     return False
@@ -143,7 +149,13 @@ def main():
     with open(words_path, encoding="utf-8") as f:
         data = json.load(f)
     words = data["words"] if isinstance(data, dict) else data
-    sb_map = {w["w"].lower(): w.get("sb") or [] for w in words}
+    # 词库里有同名不同大小写的词条（高频词 prompt / ComfyUI 的 Prompt），
+    # setdefault 先到先得：词库顺序里高频/中频在前，不会被 ComfyUI 的空 sb 覆盖
+    sb_map = {}
+    for w in words:
+        sb = w.get("sb") or []
+        sb_map.setdefault(w["w"], sb)
+        sb_map.setdefault(w["w"].lower(), sb)
     field_map = {k: fields_of(v) for k, v in sb_map.items() if v}
 
     bad_total = 0

@@ -361,9 +361,9 @@ const check = (n, c, e = '') => out.push(`${c ? '✅' : '❌'} ${n}${e ? ' — '
   const starWords = data.words.filter((w) => w.sb && w.sb.length);
   check('书中内容成块且不缺字段', starWords.every((w) => w.sb.every((b) =>
     b.k === '例' ? !!(b.p && b.t) : (b.k === '义' ? !!b.def : !!b.v))), `${starWords.length} 词`);
-  check('整页都已导入书上内容', data.categories[0].pages.slice(0, 3).every((p) =>
+  check('整页都已导入书上内容', data.categories[0].pages.slice(0, 4).every((p) =>
     data.words.filter((w) => w.cat === '高频词' && w.list === p.name).every((w) => w.sb && w.sb.length)),
-    'Word List 1 / 2 / 3');
+    'Word List 1 / 2 / 3 / 4');
   check('ComfyUI词汇页标签是中文', (data.categories.find((c) => c.name === 'ComfyUI词汇') || { pages: [] })
     .pages.every((p) => p.short && !/^[0-9]+$/.test(p.short)), '');
 
