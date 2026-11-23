@@ -156,6 +156,9 @@ python3 -I tools/wordcheck.py app/data/words.json
 
 # 7. 第二词典交叉核对（可选；接口有速率限制，容易 429）
 python3 -I tools/crosscheck.py app/data/words.json --out src/crosscheck.json
+
+# 8. 《词汇闪过》导入后逐行核对 docx 原文有没有全进词库（必跑）
+python3 -I tools/verify_star.py app/data/words.json ~/Desktop/词汇闪过*.docx
 ```
 
 > `/tmp/ocrvenv` 是临时目录，重启后可能没了。重建：
@@ -179,7 +182,19 @@ python3 -I tools/crosscheck.py app/data/words.json --out src/crosscheck.json
 
 ### 准确性是怎么验的（下次照做）
 
-把 docx 原文每行（四批共 **2649 行**带中文的）归一化后（去空格标点、把「词性 + 释义」
+**脚本已固化：`tools/verify_star.py`**（原来放 `/tmp` 重启就没了，2026-11-23 搬进工具目录）：
+
+```bash
+python3 -I tools/verify_star.py app/data/words.json ~/Desktop/词汇闪过*.docx
+```
+
+- 输出「词条 / 内容行 / 对上 / 挂到别词 / 没对上 / 未导入词」六项，退出码非 0 就是有行没进词库
+- 判据：原文行归一化后要在该词 `sb` 块里找到；「词性 + 释义」拆开各自比对；
+  词根小标题（`ag, act 做`）、`链P352` 这类跨页索引、英文括注 `(dynamics)` 不计
+- 「↪ 挂到别的词名下」是跨页内容挂对了地方，不算丢
+- 用 1~65 页四批 docx 回测：**只剩 `immigrant` 那条已知残句**，和 11-16 手工核对结论一致
+
+逐行核对的原理：把 docx 原文每行（四批共 **2649 行**带中文的）归一化后（去空格标点、把「词性 + 释义」
 拆成两个字段再各自比对），检查是否出现在该词 `sb` 块的 JSON 里。**只有 2 行没对上，且都已定性**：
 
 - `immigrant` 下那条 `in the U.S. 在美国的亚洲移民` —— 豆包把前半句 `Asian immigrants` 吃掉了，
@@ -208,8 +223,8 @@ python3 -I tools/crosscheck.py app/data/words.json --out src/crosscheck.json
 
 1. `git pull` 后先跑 `python3 -I tools/audit.py app/data/words.json` + `cd tests && node test3.js`
 2. **先陪用户对书**：他要用手机 App 逐条对纸质书（1~65 页、259 词）。
-   发现对不上就定位到「单词 + 第几块」，改 `parse_star.py` 后重跑四批 + `merge_star` + `json2js`
-   （`/tmp/verify2.py` 是那个逐行核对脚本，重启后可能没了，按「准确性是怎么验的」那节重写）
+   发现对不上就定位到「单词 + 第几块」，改 `parse_star.py` 后重跑四批 + `merge_star` + `json2js`；
+   改完跑 `python3 -I tools/verify_star.py app/data/words.json ~/Desktop/词汇闪过*.docx` 复核
 3. 接着做 **《词汇闪过》66~209 页**（仍是高频词章节，对应教材 Word List 4 起；下一个词 `elaborate`）。
    注意：「Word List 3 剩余 76 词」是旧说法，Word List 3 已在 44~65 页做完
 4. 每批照「准确性是怎么验的」那节核对，别跳
