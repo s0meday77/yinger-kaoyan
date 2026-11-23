@@ -15,7 +15,7 @@ const state = {
   voice: 'f',           // 音色 m=男声 f=女声 c=夹子音
   rate: 1,
   repeats: 2,           // 每词朗读遍数
-  hideMeaning: true,    // 释义点开才看
+  foldMeaning: false,   // 释义默认收起（false = 默认展开，跟着读看得见）
   coverWord: false,     // 听音猜词
   shuffle: false,       // 打乱顺序
   showIpa: false,
@@ -53,7 +53,7 @@ function save() {
   try {
     localStorage.setItem(KEY, JSON.stringify({
       accent: state.accent, voice: state.voice, rate: state.rate, repeats: state.repeats,
-      hideMeaning: state.hideMeaning, coverWord: state.coverWord, shuffle: state.shuffle,
+      foldMeaning: state.foldMeaning, coverWord: state.coverWord, shuffle: state.shuffle,
       showIpa: state.showIpa, autoNext: state.autoNext,
       replayWrong: state.replayWrong, mustRetype: state.mustRetype,
       day: state.day, page: state.page, cat: state.cat, theme: state.theme,
@@ -68,7 +68,8 @@ function load() {
     state.voice = d.voice === 'm' || d.voice === 'c' ? d.voice : 'f';
     state.rate = d.rate || 1;
     state.repeats = d.repeats || 2;
-    state.hideMeaning = d.hideMeaning === true;
+    // 老版本存过 hideMeaning（默认收起），这里不再认，改成默认展开
+    state.foldMeaning = d.foldMeaning === true;
     state.coverWord = !!d.coverWord;
     state.shuffle = !!d.shuffle;
     state.showIpa = !!d.showIpa;
@@ -279,7 +280,9 @@ function bind() {
     toast(state.day ? '这一天已重置' : '这一页已重置');
   });
   $('#optMean').addEventListener('change', (e) => {
-    state.hideMeaning = !e.target.checked; save(); renderList();
+    state.foldMeaning = !e.target.checked;
+    $('#optFoldMeaning').checked = state.foldMeaning;
+    save(); renderList();
   });
   $('#optTwice').addEventListener('change', (e) => {
     state.repeats = e.target.checked ? Math.max(2, state.repeats) : 1;
@@ -351,9 +354,9 @@ function bind() {
   $('#optAutoNext').addEventListener('change', (e) => { state.autoNext = e.target.checked; save(); });
   $('#optReplayWrong').addEventListener('change', (e) => { state.replayWrong = e.target.checked; save(); });
   $('#optMustRetype').addEventListener('change', (e) => { state.mustRetype = e.target.checked; save(); });
-  $('#optHideMeaning').addEventListener('change', (e) => {
-    state.hideMeaning = e.target.checked;
-    $('#optMean').checked = !state.hideMeaning;
+  $('#optFoldMeaning').addEventListener('change', (e) => {
+    state.foldMeaning = e.target.checked;
+    $('#optMean').checked = !state.foldMeaning;
     save(); renderList();
   });
   $('#optCoverWord').addEventListener('change', (e) => {
@@ -408,14 +411,14 @@ async function boot() {
   $('#rate').value = state.rate;
   $('#rateVal').textContent = state.rate.toFixed(2);
   $('#btnShuffle').classList.toggle('on', state.shuffle);
-  $('#optMean').checked = !state.hideMeaning;
+  $('#optMean').checked = !state.foldMeaning;
   $('#optTwice').checked = state.repeats >= 2;
   $('#optUndone').checked = state.filter === 'todo';
   $('#optShowIpa').checked = state.showIpa;
   $('#optAutoNext').checked = state.autoNext;
   $('#optReplayWrong').checked = state.replayWrong;
   $('#optMustRetype').checked = state.mustRetype;
-  $('#optHideMeaning').checked = state.hideMeaning;
+  $('#optFoldMeaning').checked = state.foldMeaning;
   $('#optCoverWord').checked = state.coverWord;
   $('#optShuffle').checked = state.shuffle;
 

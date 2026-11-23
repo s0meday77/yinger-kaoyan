@@ -143,13 +143,13 @@ const check = (n, c, e = '') => out.push(`${c ? '✅' : '❌'} ${n}${e ? ' — '
   check('导入过书中内容的词有折叠入口', !!bookCard, bookCard ? bookCard.querySelector('.w').textContent : '');
   const foldBtn = bookCard.querySelector('.fold');
   const extra = bookCard.querySelector('.extra');
-  check('默认收起（学到哪写到哪，不一起摊开）', extra.hidden === true, '');
+  check('默认展开（跟着读时看得见释义）', extra.hidden === false && foldBtn.querySelector('.arw').textContent === '▾', '');
   foldBtn.click();
-  check('点一下展开', extra.hidden === false && foldBtn.querySelector('.arw').textContent === '▾', '');
-  check('别的词还收着', [...$$('#wordList .card')].filter((c) => c !== bookCard && c.querySelector('.extra'))
-    .every((c) => c.querySelector('.extra').hidden === true), '');
+  check('点一下收起', extra.hidden === true && foldBtn.querySelector('.arw').textContent === '▸', '');
+  check('别的词也都默认展开', [...$$('#wordList .card')].filter((c) => c !== bookCard && c.querySelector('.extra'))
+    .every((c) => c.querySelector('.extra').hidden === false), '');
   foldBtn.click();
-  check('再点一下收起', extra.hidden === true && foldBtn.querySelector('.arw').textContent === '▸', '');
+  check('再点一下又打开', extra.hidden === false && foldBtn.querySelector('.arw').textContent === '▾', '');
   foldBtn.click();
   check('书上释义按词性显示', bookCard.querySelectorAll('.def').length >= 1, `${bookCard.querySelectorAll('.def').length} 行`);
   check('记忆/派生/近反义都在', bookCard.querySelectorAll('.note').length >= 1, `${bookCard.querySelectorAll('.note').length} 条`);
@@ -172,16 +172,17 @@ const check = (n, c, e = '') => out.push(`${c ? '✅' : '❌'} ${n}${e ? ' — '
   window.speakTTS('advances in technology');
   check('没有录音时系统语音兜底', said.length === 1, said.map((u) => u.text).join(' / '));
 
-  // ---- 释义开关（管的是还没导入书上内容的词）----
+  // ---- 释义默认展开 / 收起开关（所有词统一）----
   $$('.page-chip')[4].click();          // Word List 4 还没导入书上内容，只显示有道释义
   await sleep(60);
-  const plain = () => $$('#wordList .card')[0].querySelector('.m');
-  check('未导入的词显示有道释义', plain() && plain().hidden === false, '');
+  const plain = () => $$('#wordList .card')[0].querySelector('.extra');
+  check('未导入的词也默认展开有道释义',
+    plain() && plain().hidden === false && !!plain().querySelector('.def').textContent.trim(), '');
   const meanBox = $('#optMean');
   meanBox.checked = false;
   meanBox.dispatchEvent(new window.Event('change'));
   await sleep(40);
-  check('取消「释义」就藏起来', plain().hidden === true, '');
+  check('取消「释义」就默认收起（点标题仍能打开）', plain().hidden === true, '');
   meanBox.checked = true;
   meanBox.dispatchEvent(new window.Event('change'));
   await sleep(40);
