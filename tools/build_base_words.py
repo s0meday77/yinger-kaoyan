@@ -96,7 +96,8 @@ def ipa_of(cell):
     cell = cell.strip()
     parts = [p.strip() for p in re.findall(r"\[([^\]]+)\]", cell)]
     if parts:
-        return " / ".join(parts)
+        # `law [lɔː:]` 书上多打了一个半角冒号，音标里不该有
+        return " / ".join(p.replace(":", "").replace("ːː", "ː") for p in parts)
     m = IPA_RE.match(cell)
     return m.group(1).strip() if m else ""
 
@@ -167,6 +168,17 @@ def merge_items(items):
     return out
 
 
+def tidy_meaning(m):
+    """豆包偶尔把相邻的同一个义项抄两遍（`本应；本应`、`忌妒；忌妒`），去重。"""
+    segs = [s for s in m.split("；")]
+    out = []
+    for s in segs:
+        if out and s.strip() and s.strip() == out[-1].strip():
+            continue
+        out.append(s)
+    return "；".join(out)
+
+
 def build(items):
     """→ (词条列表, 类别对象)，类目按出现顺序编号，类目内每 20 词一天。"""
     pages, order = {}, []
@@ -192,7 +204,7 @@ def build(items):
                 "w": it["w"],
                 "us": " / ".join(it["ipa"]),
                 "uk": " / ".join(it["ipa"]),
-                "m": it["m"],
+                "m": tidy_meaning(it["m"]),
                 "us_audio": None,
                 "uk_audio": None,
                 "cat": "基础词",
