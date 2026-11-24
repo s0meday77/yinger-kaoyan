@@ -81,6 +81,7 @@ def line_ok(line, fields):
         return True
     # 行首的分类标记（`扩 [族] …`/`[近] …`）词库里只存后面的内容
     line = re.sub(r"^(记|扩|近|反)\s*", "", line)
+    line = re.sub(r"^【(记|用|扩|近|反|族)】\s*", "", line)
     line = re.sub(r"^\[(族|近|反|派)\]\s*", "", line)
     # 书上 a. (dynamics) [pl.]… 这种英文括注只是词形提示，parse 有意不存，
     # 比对时连去括注的版本一起试（中文括号里的释义要保留）
