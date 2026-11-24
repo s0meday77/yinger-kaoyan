@@ -435,6 +435,38 @@ def _split_one_line(line):
     return [line]
 
 
+def dedupe_repeated_entries(lines):
+    """豆包偶尔把同一页的几行整段重复输出一遍（289~303 页的 intuition~suburb 六条）。
+
+    第二遍有时还续着下一页的内容（suburb 第二遍多了 [pl.] 城郊住宅区 这一条义项），
+    所以不能整段丢掉：只丢和上一遍重复的前缀，多出来的尾巴接回原处。
+    """
+    segs, cur = [], None
+    for ln in lines:
+        m = ENTRY_RE.match(ln)
+        if m and re.fullmatch(r"[a-z][a-z'\-]*", m.group(1).strip().lower()):
+            cur = {"w": m.group(1).strip().lower(), "lines": [ln]}
+            segs.append(cur)
+        elif segs:
+            segs[-1]["lines"].append(ln)
+    kept, seen = [], {}
+    for s in segs:
+        prev = seen.get(s["w"])
+        if prev is not None:
+            n = 0
+            while n < len(s["lines"]) and n < len(prev) and s["lines"][n] == prev[n]:
+                n += 1
+            if n >= 2:                       # 词条行 + 至少一行相同，判为重复输出
+                prev.extend(s["lines"][n:])
+                continue
+        seen[s["w"]] = s["lines"]
+        kept.append(s)
+    out = []
+    for s in kept:                            # 最后再摊平：前面 extend 进来的是同一个 list
+        out.extend(s["lines"])
+    return out
+
+
 def prep_lines(text):
     """docx 原文 → 逐行列表（parse 和 verify_star 必须走同一套）。"""
     lines = normalize_tabs(text)
@@ -442,7 +474,8 @@ def prep_lines(text):
     lines = patch_lost_entries(lines)
     lines = apply_line_fixes(lines)
     lines = extract_entries_in_expand(lines)
-    return split_inline_examples(lines)
+    lines = split_inline_examples(lines)
+    return dedupe_repeated_entries(lines)
 
 
 def parse(text):
