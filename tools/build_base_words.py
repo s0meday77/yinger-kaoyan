@@ -260,7 +260,7 @@ def main():
     data["words"] = result
     data["count"] = len(result)
     data["categories"] = [c for c in data["categories"] if c["name"] != "基础词"] + [cat_obj]
-    order = ["高频词", "中频词", "低频词", "偶考词", "基础词", "补充词", "ComfyUI词汇"]
+    order = ["基础词", "高频词", "中频词", "低频词", "偶考词", "补充词", "ComfyUI词汇"]
     data["categories"].sort(key=lambda c: order.index(c["name"]) if c["name"] in order else 99)
     with open(WORDS, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=1)

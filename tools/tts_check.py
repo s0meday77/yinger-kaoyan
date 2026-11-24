@@ -58,7 +58,9 @@ def main():
         MAX_SEC = 9.0                    # 「a collection of geniuses」这种能念到六七秒
 
     with open(WORDS, encoding="utf-8") as f:
-        words = [w for w in json.load(f)["words"] if w.get("us_audio")]
+        # 教材词看有道录音，基础词本来就没有，按 v 字段判断
+        words = [w for w in json.load(f)["words"]
+                 if w.get("us_audio") or w.get("cat") == "基础词"]
 
     jobs = []
     for w in words:

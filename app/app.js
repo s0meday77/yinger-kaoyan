@@ -390,7 +390,8 @@ async function boot() {
     state.words = data.words;
     state.wordSet = new Set(state.words.map((w) => w.w));
     // 六个类别固定显示，没导入的标"待导入"
-    const ORDER = ['高频词', '中频词', '低频词', '偶考词', '基础词', '补充词'];
+    // 基础词排第一：用户 2026-11-25 要求「先学基础词，再接高频词」
+    const ORDER = ['基础词', '高频词', '中频词', '低频词', '偶考词', '补充词'];
     const found = data.categories || [];
     state.cats = ORDER.map((name) => found.find((c) => c.name === name)
       || { name, count: 0, pageCount: 0, dayCount: 0, days: [], pages: [] });

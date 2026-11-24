@@ -50,14 +50,17 @@ const check = (n, c, e = '') => out.push(`${c ? '✅' : '❌'} ${n}${e ? ' — '
   const cats = $$('.cat-chip');
   // 六个教材类别固定显示，ComfyUI词汇作为自建章节追加在最后
   check('教材六类 + ComfyUI 章节都在', cats.length === 7, [...cats].map((c) => c.textContent).join(' / '));
-  check('高频词是选中态', cats[0].classList.contains('active'), cats[0].textContent);
-  // 中频词、基础词已上线，剩低频/偶考/补充三类还没导入
-  check('中频词已导入', !cats[1].classList.contains('empty'), cats[1].textContent);
-  check('基础词已导入', !cats[4].classList.contains('empty'), cats[4].textContent);
-  check('剩余三类标待导入', [cats[2], cats[3], cats[5]].every((c) => c.classList.contains('empty')), '');
+  // 基础词排第一（用户 2026-11-25：先学基础词，再接高频词）
+  check('基础词是选中态', cats[0].classList.contains('active'), cats[0].textContent);
+  check('高频词已导入', !cats[1].classList.contains('empty'), cats[1].textContent);
+  check('中频词已导入', !cats[2].classList.contains('empty'), cats[2].textContent);
+  check('剩余三类标待导入', [cats[3], cats[4], cats[5]].every((c) => c.classList.contains('empty')), '');
   check('ComfyUI词汇不是待导入', !cats[6].classList.contains('empty'), cats[6].textContent);
 
-  const pg = data.categories[0].pages;
+  // 先切到高频词再验教材分页
+  cats[1].click();
+  await sleep(120);
+  const pg = data.categories.find((c) => c.name === '高频词').pages;
   const pages = $$('.page-chip');
   check('页条 = 全部 + 12 页', pages.length === pg.length + 1, `${pages.length} 个`);
   check('页序与教材一致', pg.map((p) => p.name).join(',') === Array.from({ length: 12 }, (_, i) => `Word List ${i + 1}`).join(','), '');
