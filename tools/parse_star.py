@@ -45,6 +45,8 @@ POS_RE = re.compile(r"^(" + POS_TOKEN + r"(?:\.(?:&|/)\s*" + POS_TOKEN + r")*\.)
 MARK_RE = re.compile(r"^(?:\([a-zA-Z\-]+\)\s*)?\[([^\]]{1,20})\]\s*")
 HAN_RE = re.compile(r"[一-鿿]")
 PAGE_RE = re.compile(r"^Page\s*\d*\s*$", re.I)
+# 228 页起的批次把页码写成单独一行的「第229页」，不拦住会被当成释义续句拼进去
+PAGE_CN_RE = re.compile(r"^第\s*\d+\s*页$")
 # 「链P46」是跨页索引，手机上看没用；106 页起豆包把「链」认成了「纯」
 LINK_RE = re.compile(r"\s*[链纯]\s*P\d+\s*")
 MARK_TAG_RE = re.compile(r"[\[【](族|近|反|派)[\]】]")
@@ -112,6 +114,17 @@ def split_pair(line):
     en = line[:i].strip(" ,，、;；(（[【")
     # 英文后面那半截括号会落到中文里（「National Health Council(加拿大)…」），去掉
     zh = re.sub(r"(?<=[一-鿿])\)", "", line[i:].strip())
+    # 书名号同理：`the Danish Fashion Ethical Charter《丹麦时尚道德宪章》`——
+    # 前书名号会被算进英文侧，还回去，中文那边的后书名号才配套
+    book = re.search(r"[《「『]+$", en)
+    if book:
+        en = en[:book.start()].strip()
+        zh = book.group(0) + zh
+    # 「9 cases of air rage 9起飞机上的暴力事件」——中文开头的数字被算进了英文侧
+    digit = re.search(r"\s(\d{1,2})$", en)
+    if digit and HAN_RE.match(zh):
+        en = en[:digit.start()].strip()
+        zh = digit.group(1) + zh
     # 「the identity between A and B A和B的相同之处」——原文 A 和汉字之间没空格，
     # 切在汉字前的那个大写字母其实是中文句子的一部分，还回去
     tail = re.search(r"([A-Z])$", en)
@@ -307,9 +320,129 @@ def patch_lost_entries(lines):
     return [ln for ln in out if ln.strip() not in drops]
 
 
+# 「扩」块里其实排着一个独立词条（书上给它的派生词也做了【记】+【用】），
+# 教材的词表把它单列成词，所以要抽出来单独成条：
+#     [族] density n. 【记】dens（密）+-ity（名词后缀）→密度
+#     用
+#     n. [U]密度；浓度 …
+#     [近] thick a. 茂密的      ← 这两行还是主词 dense 的
+DERIVED_MARK = "\x02"
+ENTRY_IN_EXPAND = [
+    dict(start="[族] density n. 【记】dens（密）+-ity（名词后缀）→密度",
+         stop="[近] thick a. 茂密的",
+         keep_as_expand="[族] density n. 密度",
+         word="density"),
+]
+
+
+def extract_entries_in_expand(lines):
+    out = []
+    i = 0
+    while i < len(lines):
+        hit = next((p for p in ENTRY_IN_EXPAND if p["start"] in lines[i]), None)
+        if not hit:
+            out.append(lines[i])
+            i += 1
+            continue
+        out.append(hit["keep_as_expand"])
+        out.append(DERIVED_MARK + hit["word"])
+        out.append("记 dens（密）+-ity（名词后缀）→密度" if hit["word"] == "density" else "")
+        i += 1
+        while i < len(lines) and hit["stop"] not in lines[i]:
+            ln = lines[i]
+            i += 1
+            if ln.strip() in ("用", ""):
+                continue
+            if ln.strip() == hit["start"]:
+                continue
+            if "【记】" in ln:                    # 派生词自己的记忆法已经放在上面了
+                continue
+            out.append(ln)
+        out.append(DERIVED_MARK + "dense")
+    return out
+
+
+# 逐行订正：这些都是 OCR 认错/串行，改回书上原样（内容不改，只改归属）
+LINE_FIXES = [
+    # 宪章 / 包租：释义和派生（chartered）都指向 charter，豆包把词尾 -er 吃掉了
+    ("chart [tʃɑːt] n./v. 【记】chart（纸）", "charter [tʃɑːt] n./v. 【记】chart（纸）"),
+    # 这一行把 suburb 的第 3 个义项和词根标题「util 使用」串成了一行，
+    # 留下义项还给 suburb（utilize 在下一行，本身是好的）
+    ("util [ˈjuːtɪl] n. [pl.]城郊住宅区", "n. [pl.]城郊住宅区"),
+    # 多出一个 the，原句是 at the rear 在后部
+    ("the at the rear 在后部", "at the rear 在后部"),
+]
+
+
+def apply_line_fixes(lines):
+    out = []
+    for ln in lines:
+        for old, new in LINE_FIXES:
+            if old in ln:
+                ln = ln.replace(old, new)
+                break
+        out.append(ln)
+    return out
+
+
+# ---------------- 行内例句切分（228 页起的版式） ----------------
+# 这批豆包把搭配和义项排在同一行：
+#     n.  [pl.] 全体人员，职员  medical personnel 医务人员
+#                                 military personnel 军事人员
+# 不切开的话整条搭配会混进释义里（274~288 页 10 个词一条搭配都没有）。
+# 切点有两种：义项后的两个以上空格，或「）」后面一个空格。
+INLINE_GAP_WIDE = re.compile(r"\s{2,}(?=[A-Za-z0-9])")
+INLINE_GAP_AFTER_PAREN = re.compile(r"(?<=[）)】])\s+(?=[A-Za-z])")
+# 「富有情调的；美妙的 romantic music 富有情调的音乐」——义项后只隔一个空格，
+# 靠「后面至少两个英文单词」来认，单靠一个空格会误伤 `（常用 the rear）[sing.]后部`
+INLINE_GAP_SPACE = re.compile(r"\s(?=[A-Za-z][A-Za-z'’\-]*\s[A-Za-z])")
+BRACKET_RE = re.compile(r"[\[\]（）()【】《》]")
+
+
+def split_inline_examples(lines):
+    out = []
+    for ln in lines:
+        if ln.startswith(SENSE_MARK):        # tab 版式的义项格子，例句已经分好了
+            out.append(ln)
+            continue
+        out.extend(_split_one_line(ln))
+    return out
+
+
+def _split_one_line(line):
+    """把「词性 + 中文义项 + 英文搭配 中文翻译」拆成两行；拆不动就原样返回。"""
+    s = line.rstrip()
+    if not s or s.lstrip().startswith(("■", "#")) or not HAN_RE.search(s):
+        return [line]
+    if TAG_START_RE.match(s.strip()):        # 扩/近/反/族 行不拆
+        return [line]
+    for rx, strict in ((INLINE_GAP_WIDE, False), (INLINE_GAP_AFTER_PAREN, False),
+                       (INLINE_GAP_SPACE, True)):
+        for m in rx.finditer(s):
+            left, right = s[:m.start()].rstrip(), s[m.end():].strip()
+            if not HAN_RE.search(left) or not HAN_RE.search(right):
+                continue
+            if left.endswith(("（", "(", "【")):
+                continue
+            en, zh = split_pair(right)       # 右边必须真的是「英文 + 中文」
+            if not en:
+                continue
+            if strict:
+                # 单空格那条规则要更保守：英文侧不能夹括号，且得是两个词以上
+                if BRACKET_RE.search(en) or len(en.split()) < 2:
+                    continue
+            return [left, right]
+    return [line]
+
+
 def prep_lines(text):
     """docx 原文 → 逐行列表（parse 和 verify_star 必须走同一套）。"""
-    return patch_lost_entries(join_split_entries(normalize_tabs(text)))
+    lines = normalize_tabs(text)
+    lines = join_split_entries(lines)
+    lines = patch_lost_entries(lines)
+    lines = apply_line_fixes(lines)
+    lines = extract_entries_in_expand(lines)
+    return split_inline_examples(lines)
 
 
 def parse(text):
@@ -363,10 +496,22 @@ def parse(text):
         line = clean(line)
         if not line:
             continue
-        if PAGE_RE.match(line):
+        if PAGE_RE.match(line) or PAGE_CN_RE.match(line):
             continue
         if re.fullmatch(r"链\s*P\d+", line):
             continue                     # 单独残留的跨页索引
+
+        # 「扩」块里抽出来的独立词条（density）：切换当前词，不需要音标
+        if line.startswith(DERIVED_MARK):
+            ww = line[len(DERIVED_MARK):].strip().lower()
+            if cur is not None and cur["w"] != ww:
+                prev_blocks = cur["blocks"]
+            cur = entries.setdefault(ww, {"w": ww, "blocks": []})
+            known.add(ww)
+            after_meta = False
+            pending_pos = ""
+            last_pos = ""
+            continue
 
         m = ENTRY_RE.match(line)
         if m:
@@ -425,7 +570,7 @@ def parse(text):
 
         # 【近] 这种半角右括号的错字书上有，得一起认；【族】是派生词，同【扩】
         # 这一批还有不带括号的写法：`扩 [族] xxx`、`[近] xxx`
-        tag = re.match(r"^(?:【用】\s*)?(?:【(记|扩|近|反|族)[】\]]|(扩|近|反|族)\s+|\[(近|反|族|扩)\])\s*(.*)$", line)
+        tag = re.match(r"^(?:【用】\s*)?(?:【(记|扩|近|反|族)[】\]]|(记|扩|近|反|族)\s+|\[(近|反|族|扩)\])\s*(.*)$", line)
         if tag:
             kind = tag.group(1) or tag.group(2) or tag.group(3)
             body = clean(tag.group(4))

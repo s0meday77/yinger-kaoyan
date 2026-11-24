@@ -102,6 +102,11 @@ def segments(lines):
     """按词条行切段：{word: [原始行, ...]}，保持书本顺序。"""
     out, cur = {}, None
     for line in lines:
+        # 「扩」块里抽出来的独立词条（density）：从这一行起算新词
+        if line.startswith(P.DERIVED_MARK):
+            ww = line[len(P.DERIVED_MARK):].strip().lower()
+            cur = out.setdefault(ww, [])
+            continue
         me = P.ENTRY_RE.match(line)
         if me:
             ww = me.group(1).strip().lower()
@@ -120,7 +125,7 @@ def skip_line(line):
     line = line.strip()
     if not line:
         return True
-    if P.PAGE_MARK_RE.match(line) or P.PAGE_RE.match(line):
+    if P.PAGE_MARK_RE.match(line) or P.PAGE_RE.match(line) or P.PAGE_CN_RE.match(line):
         return True
     if re.fullmatch(r"【?\s*Page\s*\d+\s*】?", line, re.I):
         return True
