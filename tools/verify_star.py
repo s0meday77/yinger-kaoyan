@@ -24,7 +24,7 @@ import parse_star as P  # noqa: E402
 
 HAN_RE = re.compile(r"[一-鿿]")
 # 词性标记（非锚定，行内任意位置）
-POS_ANY = re.compile(r"(?:^|\s)((?:n|v|vt|vi|a|ad|adj|adv|prep|conj|pron|num|art|int|aux)"
+POS_ANY = re.compile(r"(?:^|\s)((?:modal\s+|aux\s+)?(?:n|v|vt|vi|a|ad|adj|adv|prep|conj|pron|num|art|int|aux)"
                      r"(?:\.(?:&|/)\s*(?:n|v|vt|vi|a|ad|adj|adv|prep|conj|pron|num|art|int|aux))*\.)")
 PUNCT = "，。、；：！？,.;:!?·•…—－-—\"'“”‘’（）()【】[]《》<>〈〉「」『』/\\*＋+"
 
@@ -77,7 +77,8 @@ def line_ok(line, fields):
         return True
     # 纯词性行（`det.`、`vt.&vi.`）：书上是义项的分隔符，词库里记在块的 pos 上，
     # fields_of 不比 pos，直接放行（double 的 det. 曾被误挂到 decide 名下）
-    if re.fullmatch(P.POS_TOKEN + r"(?:\.(?:&|/)\s*" + P.POS_TOKEN + r")*\.", line.rstrip()):
+    if re.fullmatch(r"(?:(?:modal|aux)\s+)?" + P.POS_TOKEN
+                    + r"(?:\.(?:&|/)\s*" + P.POS_TOKEN + r")*\.", line.rstrip()):
         return True
     # 行首的分类标记（`扩 [族] …`/`[近] …`）词库里只存后面的内容
     line = re.sub(r"^(记|扩|近|反)\s*", "", line)
@@ -90,7 +91,11 @@ def line_ok(line, fields):
         if hit(cand, fields):
             return True
         m = POS_ANY.search(cand)       # 「词性 + 释义」拆开各自比对
-        if m and hit(cand[:m.start()], fields) and hit(cand[m.end():], fields):
+        # 左边是纯词性（`modal v. 敢`）时词库里记在块的 pos 上，不去 fields 里找
+        left_ok = m and (hit(cand[:m.start()], fields) or re.fullmatch(
+            r"(?:(?:modal|aux)\s+)?" + P.POS_TOKEN
+            + r"(?:\.(?:&|/)\s*" + P.POS_TOKEN + r")*\.", cand[:m.start()].strip()))
+        if left_ok and hit(cand[m.end():], fields):
             return True
         idx = HAN_RE.search(cand)      # 「英文 + 中文」拆开各自比对
         if idx and idx.start() > 0 and hit(cand[:idx.start()], fields) \

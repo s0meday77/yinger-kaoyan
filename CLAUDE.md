@@ -297,6 +297,21 @@ python3 -I tools/verify_star.py app/data/words.json ~/Desktop/词汇闪过*.docx
 - `censorship` 第一条豆包整条漏掉，2026-11-24 补拍 304 页后单独补入（3 条搭配）
   —— 补拍件里它的块顺序被打乱（[记] 掉到词条行外、词义跑到末尾），按书上语义重排成 记 → 义 → 例
 
+### 2026-11-25 二轮深查（用户问「确保全部正确了吧」，又抓出 5 处）
+
+| 问题 | 表现 | 修法 |
+|---|---|---|
+| **义项挂错词** | 241 页 `currency` 的第二义项「[U]被接受；传播 / receive wide currency 被广泛接受」被排到了 `curriculum` 名下 | 新增 `MOVE_LINES` + `move_misplaced_lines()`，按内容搬回 currency |
+| **词性被当例句** | `dare` 的 `modal v. 敢` 解析成例句 `modal v.` / `敢` | `POS_RE` 支持 `modal v.` / `aux v.`；`verify_star` 同步放行 |
+| **数字归属** | `be ahead by 7 领先7分` 的 7 是英文的，`9起飞机…` 的 9 是中文的 | 只有数字**紧贴汉字**才算中文（`line[i-1].isdigit()` 且前面是空格/`$`） |
+| **大写字母归属** | `a compound of A and B A 和 B 的混合物`、`an exchange of…` 的 A/B 属于中文 | 空格隔开的单字母，若中文侧没有该字母就搬回去；**罗马数字 IVXLCDM 不搬**（`volume V` 第五卷） |
+| **中文漏字** | `youngsters aged 8 to 14 至14岁的少年儿童` 缺开头的 8 | `LINE_FIXES` 补全（英文侧有 8 to 14 可对照） |
+| **词根标题被切开** | `tra 拉拽 trai tract 引` 被行内切分规则切成两行，后半截当成搭配 | 单空格那条规则再加限制：中文译文至少三个字 |
+| **补拍件覆盖正片** | 补拍 304 页里有 countryside/deadline/framework/greenhouse 的残缺版，批量 merge 会把完整版覆盖掉 | 补拍件移到 `src/star_docx/补充/`，不进 `中频词*.docx` 通配；censorship 用 `/tmp/censorship.json` 单条合并 |
+
+**这轮复核的结果**：逐行 0 丢失、反向核对只剩 2 处**有意订正**（`density n. 密度` 由书上「→密度」拼成、
+`8至14岁的少年儿童` 补回漏掉的 8）、结构异常 0、搭配归属 0 误挂、测试 79/79。
+
 ### 这批新踩的坑（解析器都已修）
 
 1. **行内例句**：274-288 页把搭配排在义项同一行（`n. [pl.] 全体人员，职员  medical personnel 医务人员`），

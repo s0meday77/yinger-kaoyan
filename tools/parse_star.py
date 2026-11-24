@@ -39,7 +39,8 @@ ENTRY_RE = re.compile(r"^([A-Za-z][A-Za-z'\- ]*?)\s*(?:\[[^\]]{0,40}\]|/" + PHON
 # 词性：n. / vt. / vt.&vi. / a. / ad. / adj. 等——必须带句点，
 # 否则 "a dvances in technology" 这种搭配行会被误判成词性 a. + 释义
 POS_TOKEN = r"(?:n|v|vt|vi|a|ad|adj|adv|prep|conj|pron|num|art|int|aux|det|pl)"
-POS_RE = re.compile(r"^(" + POS_TOKEN + r"(?:\.(?:&|/)\s*" + POS_TOKEN + r")*\.)\s*")
+POS_RE = re.compile(r"^((?:modal\s+|aux\s+)?" + POS_TOKEN
+                    + r"(?:\.(?:&|/)\s*" + POS_TOKEN + r")*\.)\s*")
 # 义项标记 [C,U] [C-常用sing.] [sing.,U] 等；
 # 书上还会在前面挂个括注：`(ethics) [pl.] 道德准则`
 MARK_RE = re.compile(r"^(?:\([a-zA-Z\-]+\)\s*)?\[([^\]]{1,20})\]\s*")
@@ -120,17 +121,30 @@ def split_pair(line):
     if book:
         en = en[:book.start()].strip()
         zh = book.group(0) + zh
-    # 「9 cases of air rage 9起飞机上的暴力事件」——中文开头的数字被算进了英文侧
-    digit = re.search(r"\s(\d{1,2})$", en)
-    if digit and HAN_RE.match(zh):
-        en = en[:digit.start()].strip()
-        zh = digit.group(1) + zh
+    # 「9 cases of air rage 9起飞机上的暴力事件」「$8 a dozen 8美元一打」——
+    # 数字**紧贴着汉字**才算中文的；「be ahead by 7 领先7分」里的 7 是英文的
+    if i > 0 and line[i - 1].isdigit():
+        j = i
+        while j > 0 and line[j - 1].isdigit():
+            j -= 1
+        num = line[j:i]
+        if (j == 0 or line[j - 1] == " " or line[j - 1] == "$") and en.endswith(num):
+            en = en[:-len(num)].strip()
+            zh = num + zh
     # 「the identity between A and B A和B的相同之处」——原文 A 和汉字之间没空格，
     # 切在汉字前的那个大写字母其实是中文句子的一部分，还回去
     tail = re.search(r"([A-Z])$", en)
     if tail and i > 0 and line[i - 1] != " ":
         en = en[:-1].strip()
         zh = tail.group(1) + zh
+    else:
+        # 「a compound of A and B A 和 B 的混合物」——中间多了空格，中文侧
+        # 也不含这个字母，说明它属于中文；「plan A 计划A」这种中文已经有了，不动
+        m2 = re.search(r"\s([A-Z])$", en)
+        # 罗马数字（volume V 第五卷）是英文的，不能搬
+        if m2 and m2.group(1) not in "IVXLCDM" and m2.group(1) not in zh:
+            en = en[:m2.start()].strip()
+            zh = m2.group(1) + zh
     # 「the commercial use of… ……的商业用途」——后半截省略号被算进了英文侧，
     # 中文就只剩「的商业用途」。末尾留一个省略号给英文，其余还给中文
     dots = re.search(r"(…+)\s*$", en)
@@ -371,6 +385,8 @@ LINE_FIXES = [
     ("util [ˈjuːtɪl] n. [pl.]城郊住宅区", "n. [pl.]城郊住宅区"),
     # 多出一个 the，原句是 at the rear 在后部
     ("the at the rear 在后部", "at the rear 在后部"),
+    # 中文侧漏了开头的 8（英文是 aged 8 to 14）
+    ("youngsters aged 8 to 14 至14岁的少年儿童", "youngsters aged 8 to 14 8至14岁的少年儿童"),
 ]
 
 
@@ -428,8 +444,12 @@ def _split_one_line(line):
             if not en:
                 continue
             if strict:
-                # 单空格那条规则要更保守：英文侧不能夹括号，且得是两个词以上
+                # 单空格那条规则要更保守：英文侧不能夹括号，得是两个词以上，
+                # 中文译文至少三个字——否则「tra 拉拽 trai tract 引」这种
+                # 词根小标题会被切开，后半截被当成搭配
                 if BRACKET_RE.search(en) or len(en.split()) < 2:
+                    continue
+                if len(re.findall(r"[一-鿿]", zh)) < 3:
                     continue
             return [left, right]
     return [line]
@@ -467,6 +487,44 @@ def dedupe_repeated_entries(lines):
     return out
 
 
+# 跨页时豆包会把**上一个词**没说完的义项，排到下一个词的词条行下面
+# （241 页：currency 的第二义项挂到了 curriculum 名下，语义完全不对，
+#   而且 "receive wide currency" 本身就写着 currency）
+MOVE_LINES = [
+    dict(lines=["n. [U]被接受；传播", "receive wide currency 被广泛接受"], to="currency"),
+]
+
+
+def move_misplaced_lines(lines):
+    out = list(lines)
+    for mv in MOVE_LINES:
+        idx = [i for i, l in enumerate(out) if l.strip() in mv["lines"]]
+        if len(idx) != len(mv["lines"]):
+            continue
+        moving = [out[i] for i in sorted(idx)]
+        for i in sorted(idx, reverse=True):
+            del out[i]
+        tgt = None
+        for i, l in enumerate(out):
+            m = ENTRY_RE.match(l)
+            if m and m.group(1).strip().lower() == mv["to"]:
+                tgt = i
+                break
+        if tgt is None:
+            out.extend(moving)
+            continue
+        end = len(out)
+        for j in range(tgt + 1, len(out)):
+            mj = ENTRY_RE.match(out[j])
+            if mj and re.fullmatch(r"[a-z][a-z'\-]*", mj.group(1).strip().lower()):
+                end = j
+                break
+        while end > tgt + 1 and not out[end - 1].strip():
+            end -= 1
+        out[end:end] = moving
+    return out
+
+
 def prep_lines(text):
     """docx 原文 → 逐行列表（parse 和 verify_star 必须走同一套）。"""
     lines = normalize_tabs(text)
@@ -475,6 +533,7 @@ def prep_lines(text):
     lines = apply_line_fixes(lines)
     lines = extract_entries_in_expand(lines)
     lines = split_inline_examples(lines)
+    lines = move_misplaced_lines(lines)
     return dedupe_repeated_entries(lines)
 
 
