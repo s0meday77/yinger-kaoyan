@@ -51,9 +51,10 @@ const check = (n, c, e = '') => out.push(`${c ? '✅' : '❌'} ${n}${e ? ' — '
   // 六个教材类别固定显示，ComfyUI词汇作为自建章节追加在最后
   check('教材六类 + ComfyUI 章节都在', cats.length === 7, [...cats].map((c) => c.textContent).join(' / '));
   check('高频词是选中态', cats[0].classList.contains('active'), cats[0].textContent);
-  // 中频词已上线，剩低频/偶考/基础/补充四类还没导入
+  // 中频词、基础词已上线，剩低频/偶考/补充三类还没导入
   check('中频词已导入', !cats[1].classList.contains('empty'), cats[1].textContent);
-  check('其余四类标待导入', [...cats].slice(2, 6).every((c) => c.classList.contains('empty')), '');
+  check('基础词已导入', !cats[4].classList.contains('empty'), cats[4].textContent);
+  check('剩余三类标待导入', [cats[2], cats[3], cats[5]].every((c) => c.classList.contains('empty')), '');
   check('ComfyUI词汇不是待导入', !cats[6].classList.contains('empty'), cats[6].textContent);
 
   const pg = data.categories[0].pages;

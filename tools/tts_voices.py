@@ -25,6 +25,7 @@
 import argparse
 import json
 import os
+import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -53,7 +54,9 @@ def record(key, speed, limit=0):
     voice, label = VOICES[key]
     with open(WORDS, encoding="utf-8") as f:
         words = json.load(f)["words"]
-    todo = [w for w in words if w.get("us_audio")]
+    # 教材词有有道录音的判断条件；基础词是后来才进的（没有有道录音），
+    # 也要用 Kokoro 录，不然只能靠系统语音。ComfyUI 的模型名继续排除。
+    todo = [w for w in words if w.get("us_audio") or w.get("cat") == "基础词"]
     if limit:
         todo = todo[:limit]
     k = load()
@@ -64,7 +67,9 @@ def record(key, speed, limit=0):
         if os.path.exists(dst) and os.path.getsize(dst) > 800:
             done += 1
             continue                        # 断点续跑：已经录好的不再重来
-        samples, sr = k.create(w["w"], voice=voice, speed=speed, lang="en-us")
+        # `autumn/fall`、`a/an` 这种斜杠要念 or，别念成 slash
+        text = re.sub(r"\s*/\s*", " or ", w["w"])
+        samples, sr = k.create(text, voice=voice, speed=speed, lang="en-us")
         wav = dst + ".wav"
         write_wav(wav, samples, sr)
         to_mp3(wav, dst)
@@ -80,7 +85,7 @@ def apply():
         doc = json.load(f)
     hit, miss = 0, []
     for w in doc["words"]:
-        if not w.get("us_audio"):
+        if not (w.get("us_audio") or w.get("cat") == "基础词"):
             continue                        # ComfyUI 的模型名继续走系统 TTS
         paths = {}
         for key in VOICES:
